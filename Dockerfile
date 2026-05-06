@@ -9,6 +9,9 @@ RUN npm run build
 # Stage 2: Serve with nginx
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
+# Placeholder config.js — overwritten at runtime by entrypoint.sh
+RUN echo 'window.__env={VITE_SUPABASE_URL:"",VITE_SUPABASE_ANON_KEY:""};' \
+    > /usr/share/nginx/html/config.js
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

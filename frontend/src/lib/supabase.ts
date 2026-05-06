@@ -12,6 +12,15 @@ const supabaseUrl =
 const supabaseAnonKey =
   window.__env?.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  document.body.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;background:#FFF8F0;color:#8B5E3C;text-align:center;padding:24px">' +
+    '<div><p style="font-size:48px;margin-bottom:16px">🍞</p>' +
+    '<h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Configuration missing</h2>' +
+    '<p style="font-size:14px;opacity:.7">VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set as environment variables in Render.</p></div></div>';
+  throw new Error("Missing Supabase environment variables.");
+}
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
