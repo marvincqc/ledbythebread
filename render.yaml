@@ -1,9 +1,9 @@
 services:
   - type: web
     name: ledbythebread
-    runtime: static
+    env: static
     buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
+    staticPublishPath: ./frontend/dist
     pullRequestPreviewsEnabled: false
     routes:
       - type: rewrite
