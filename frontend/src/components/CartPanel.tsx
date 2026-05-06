@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 
-const MIN_ORDER = 150;
+const MIN_ORDER = 15;
 
 export default function CartPanel() {
   const { items, updateQuantity, removeItem, closeCart, subtotal, totalItems } =
@@ -90,7 +90,7 @@ export default function CartPanel() {
                     {item.sku.name}
                   </p>
                   <p className="text-primary font-semibold text-sm">
-                    ₱{item.sku.price.toFixed(2)}{" "}
+                    S${item.sku.price.toFixed(2)}{" "}
                     <span className="text-text-muted font-normal">ea.</span>
                   </p>
 
@@ -133,7 +133,7 @@ export default function CartPanel() {
                 {/* Line total */}
                 <div className="text-right flex-shrink-0">
                   <p className="font-semibold text-primary text-sm">
-                    ₱{(item.sku.price * item.quantity).toFixed(2)}
+                    S${(item.sku.price * item.quantity).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -147,7 +147,7 @@ export default function CartPanel() {
             {/* Minimum order warning */}
             {belowMin && (
               <div className="bg-error/10 border border-error/20 rounded-lg px-3 py-2 text-error text-sm">
-                Add ₱{(MIN_ORDER - sub).toFixed(2)} more to meet the ₱{MIN_ORDER} minimum order.
+                Add S${(MIN_ORDER - sub).toFixed(2)} more to meet the S${MIN_ORDER} minimum order.
               </div>
             )}
 
@@ -155,7 +155,7 @@ export default function CartPanel() {
             <div className="flex justify-between items-center">
               <span className="font-medium text-text-muted">Subtotal</span>
               <span className="font-bold text-xl text-primary">
-                ₱{sub.toFixed(2)}
+                S${sub.toFixed(2)}
               </span>
             </div>
 

@@ -19,7 +19,7 @@ function getNextDays(count: number): string[] {
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-PH", {
+  return d.toLocaleDateString("en-SG", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -175,10 +175,10 @@ export default function Checkout() {
                       }`}
                     >
                       <span className="block text-xs font-medium">
-                        {new Date(date + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short" })}
+                        {new Date(date + "T00:00:00").toLocaleDateString("en-SG", { weekday: "short" })}
                       </span>
                       <span className="block text-sm font-bold mt-0.5">
-                        {new Date(date + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                        {new Date(date + "T00:00:00").toLocaleDateString("en-SG", { month: "short", day: "numeric" })}
                       </span>
                     </button>
                   );
@@ -268,7 +268,7 @@ export default function Checkout() {
             id="address"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            placeholder="House/Unit no., Street, Barangay, City, Province"
+            placeholder="Block XX, Street Name, #XX-XX, Singapore XXXXXX"
             rows={3}
             className="input resize-none"
             required
@@ -288,7 +288,7 @@ export default function Checkout() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Juan dela Cruz"
+                placeholder="Your full name"
                 className="input"
                 required
               />
@@ -300,7 +300,7 @@ export default function Checkout() {
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="09XX XXX XXXX"
+                placeholder="+65 9XXX XXXX"
                 className="input"
                 required
               />
@@ -333,13 +333,13 @@ export default function Checkout() {
                   <span className="font-medium text-text-main">×{item.quantity}</span>
                 </span>
                 <span className="font-medium">
-                  ₱{(item.sku.price * item.quantity).toFixed(2)}
+                  S${(item.sku.price * item.quantity).toFixed(2)}
                 </span>
               </div>
             ))}
             <div className="border-t border-primary/10 pt-2 mt-2 flex justify-between">
               <span className="font-semibold">Subtotal</span>
-              <span className="font-bold text-xl text-primary">₱{sub.toFixed(2)}</span>
+              <span className="font-bold text-xl text-primary">S${sub.toFixed(2)}</span>
             </div>
           </div>
 

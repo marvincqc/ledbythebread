@@ -20,7 +20,7 @@ function getStepIndex(status: OrderStatus): number {
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-PH", {
+  return d.toLocaleDateString("en-SG", {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -257,14 +257,14 @@ export default function OrderConfirmation() {
                   <span className="font-semibold text-text-main">×{item.quantity}</span>
                 </span>
                 <span className="font-medium">
-                  ₱{(item.unit_price * item.quantity).toFixed(2)}
+                  S${(item.unit_price * item.quantity).toFixed(2)}
                 </span>
               </div>
             ))}
             <div className="border-t border-primary/10 pt-2 mt-1 flex justify-between">
               <span className="font-semibold">Total</span>
               <span className="font-bold text-lg text-primary">
-                ₱{order.subtotal.toFixed(2)}
+                S${order.subtotal.toFixed(2)}
               </span>
             </div>
           </div>

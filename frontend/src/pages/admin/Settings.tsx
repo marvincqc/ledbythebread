@@ -5,7 +5,7 @@ import type { AdminSetting } from "../../types";
 
 const SETTING_META: Record<string, { label: string; description: string; type: string; min?: number }> = {
   min_order_amount: {
-    label: "Minimum Order Amount (₱)",
+    label: "Minimum Order Amount (S$)",
     description: "The minimum subtotal required to place an order.",
     type: "number",
     min: 0,

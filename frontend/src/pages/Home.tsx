@@ -57,23 +57,22 @@ export default function Home() {
       {/* Hero */}
       <section className="mb-10 text-center">
         <div className="inline-block bg-accent/20 text-accent-dark font-semibold text-sm px-4 py-1 rounded-full mb-4">
-          Fresh Baked Daily
+          Fresh Baked in Singapore · Delivered to Your Door
         </div>
         <h1 className="font-heading text-4xl md:text-5xl font-bold text-primary mb-4 leading-tight">
           Freshly Baked<br />
           <span className="text-accent">Pandesal</span> Delivered
         </h1>
         <p className="text-text-muted text-lg max-w-xl mx-auto">
-          Pre-order your favorite Filipino bread rolls for morning or evening delivery.
-          Made fresh every day with love.
+          Home-baked Filipino bread rolls, made fresh daily in Singapore.
         </p>
 
         {/* Stats */}
         <div className="flex justify-center gap-8 mt-8">
           {[
-            { label: "Baked Fresh", value: "Daily" },
+            { label: "Made Fresh", value: "Daily" },
             { label: "Delivery Slots", value: "2x/day" },
-            { label: "Min. Order", value: "₱150" },
+            { label: "Min. Order", value: "S$15" },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="font-heading font-bold text-2xl text-primary">{stat.value}</p>
@@ -191,7 +190,7 @@ function SkuCard({
         {/* Price + CTA */}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-primary/10">
           <p className="font-heading font-bold text-xl text-primary">
-            ₱{sku.price.toFixed(2)}
+            S${sku.price.toFixed(2)}
             {!sku.is_bundle && (
               <span className="text-xs font-normal text-text-muted ml-1">/pc</span>
             )}

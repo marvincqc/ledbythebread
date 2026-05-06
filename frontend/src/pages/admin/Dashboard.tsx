@@ -117,7 +117,7 @@ export default function AdminDashboard() {
     },
     {
       label: "Revenue Today",
-      value: `₱${stats.revenueToday.toFixed(2)}`,
+      value: `S$${stats.revenueToday.toFixed(2)}`,
       icon: "💰",
       color: "bg-green-50 border-green-200",
     },
@@ -167,7 +167,7 @@ export default function AdminDashboard() {
       <main className="max-w-6xl mx-auto px-4 py-8">
         <h1 className="font-heading text-3xl font-bold text-primary mb-2">Dashboard</h1>
         <p className="text-text-muted mb-8">
-          {new Date().toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+          {new Date().toLocaleDateString("en-SG", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
         </p>
 
         {loading ? (
@@ -256,7 +256,7 @@ export default function AdminDashboard() {
                             {order.slot_type}
                           </td>
                           <td className="px-5 py-3 font-medium">
-                            ₱{order.subtotal.toFixed(2)}
+                            S${order.subtotal.toFixed(2)}
                           </td>
                           <td className="px-5 py-3">
                             <span className={`badge ${STATUS_COLORS[order.status as keyof typeof STATUS_COLORS] ?? "bg-gray-100 text-gray-800"}`}>

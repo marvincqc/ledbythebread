@@ -16,8 +16,8 @@ function getNextDays(count: number): string[] {
 function formatDateHeader(dateStr: string) {
   const d = new Date(dateStr + "T00:00:00");
   return {
-    weekday: d.toLocaleDateString("en-PH", { weekday: "short" }),
-    date: d.toLocaleDateString("en-PH", { month: "short", day: "numeric" }),
+    weekday: d.toLocaleDateString("en-SG", { weekday: "short" }),
+    date: d.toLocaleDateString("en-SG", { month: "short", day: "numeric" }),
   };
 }
 

@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 
-const MIN_ORDER = 150;
+const MIN_ORDER = 15;
 
 export default function Cart() {
   const { items, updateQuantity, removeItem, subtotal, totalItems } = useCartStore();
@@ -58,7 +58,7 @@ export default function Cart() {
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-text-main truncate">{item.sku.name}</h3>
               <p className="text-primary font-medium text-sm">
-                ₱{item.sku.price.toFixed(2)} ea.
+                S${item.sku.price.toFixed(2)} ea.
               </p>
 
               <div className="flex items-center gap-3 mt-3">
@@ -96,7 +96,7 @@ export default function Cart() {
             {/* Line total */}
             <div className="text-right flex-shrink-0">
               <p className="font-bold text-primary text-lg">
-                ₱{(item.sku.price * item.quantity).toFixed(2)}
+                S${(item.sku.price * item.quantity).toFixed(2)}
               </p>
             </div>
           </div>
@@ -112,15 +112,15 @@ export default function Cart() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <span>
-              Minimum order is ₱{MIN_ORDER}. Add{" "}
-              <strong>₱{(MIN_ORDER - sub).toFixed(2)}</strong> more to continue.
+              Minimum order is S${MIN_ORDER}. Add{" "}
+              <strong>S${(MIN_ORDER - sub).toFixed(2)}</strong> more to continue.
             </span>
           </div>
         )}
 
         <div className="flex justify-between items-center">
           <span className="text-text-muted">Subtotal</span>
-          <span className="font-bold text-2xl text-primary">₱{sub.toFixed(2)}</span>
+          <span className="font-bold text-2xl text-primary">S${sub.toFixed(2)}</span>
         </div>
 
         <p className="text-text-muted text-xs">

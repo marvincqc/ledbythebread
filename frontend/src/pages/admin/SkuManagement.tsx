@@ -242,7 +242,7 @@ export default function SkuManagement() {
                         {sku.category?.name ?? "—"}
                       </td>
                       <td className="px-5 py-3 font-semibold text-primary">
-                        ₱{sku.price.toFixed(2)}
+                        S${sku.price.toFixed(2)}
                       </td>
                       <td className="px-5 py-3">
                         {sku.is_bundle ? (
@@ -325,7 +325,7 @@ export default function SkuManagement() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Price (₱) *</label>
+                  <label className="label">Price (S$) *</label>
                   <input
                     type="number"
                     min="0.01"

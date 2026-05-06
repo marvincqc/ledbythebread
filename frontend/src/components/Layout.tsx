@@ -183,8 +183,8 @@ export default function Layout() {
       {/* Footer */}
       <footer className="bg-primary text-white py-8 mt-12">
         <div className="max-w-5xl mx-auto px-4 text-center">
-          <p className="font-heading text-lg font-semibold mb-1">Led by the Bread</p>
-          <p className="text-white/70 text-sm">Fresh pandesal, delivered to your door.</p>
+          <p className="font-heading text-lg font-semibold mb-1">Led by the Bread · Singapore Home Bakery</p>
+          <p className="text-white/70 text-sm">Home-baked Filipino bread rolls, made fresh daily in Singapore.</p>
           <p className="text-white/50 text-xs mt-3">© {new Date().getFullYear()} Led by the Bread. All rights reserved.</p>
         </div>
       </footer>

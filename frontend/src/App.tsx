@@ -1,22 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-// Customer pages
-import Home from "./pages/Home";
-import Cart from "./pages/Cart";
-import Checkout from "./pages/Checkout";
-import OrderConfirmation from "./pages/OrderConfirmation";
+// Customer pages (lazy-loaded)
+const Home = lazy(() => import("./pages/Home"));
+const Cart = lazy(() => import("./pages/Cart"));
+const Checkout = lazy(() => import("./pages/Checkout"));
+const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation"));
 
-// Admin pages
-import AdminLogin from "./pages/admin/Login";
-import AdminDashboard from "./pages/admin/Dashboard";
-import SlotManagement from "./pages/admin/SlotManagement";
-import SkuManagement from "./pages/admin/SkuManagement";
-import OrderManagement from "./pages/admin/OrderManagement";
-import AdminSettings from "./pages/admin/Settings";
+// Admin pages (lazy-loaded)
+const AdminLogin = lazy(() => import("./pages/admin/Login"));
+const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
+const SlotManagement = lazy(() => import("./pages/admin/SlotManagement"));
+const SkuManagement = lazy(() => import("./pages/admin/SkuManagement"));
+const OrderManagement = lazy(() => import("./pages/admin/OrderManagement"));
+const AdminSettings = lazy(() => import("./pages/admin/Settings"));
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -27,6 +27,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Suspense fallback={null}>
       <Routes>
         {/* Customer-facing routes with shared layout */}
         <Route element={<Layout />}>
@@ -84,6 +85,7 @@ export default function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

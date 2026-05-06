@@ -210,7 +210,7 @@ export default function OrderManagement() {
                                 {order.id.slice(0, 8).toUpperCase()}
                               </span>
                               <div className="text-xs text-text-muted mt-0.5">
-                                {new Date(order.created_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })}
+                                {new Date(order.created_at).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
                               </div>
                             </td>
                             <td className="px-4 py-3">
@@ -221,7 +221,7 @@ export default function OrderManagement() {
                               {order.slot_type}
                             </td>
                             <td className="px-4 py-3 font-semibold text-primary">
-                              ₱{order.subtotal.toFixed(2)}
+                              S${order.subtotal.toFixed(2)}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`badge ${STATUS_COLORS[order.status as OrderStatus] ?? "bg-gray-100 text-gray-800"}`}>
@@ -314,12 +314,12 @@ export default function OrderManagement() {
                     {selectedOrder.order_items.map((item) => (
                       <div key={item.id} className="flex justify-between text-xs">
                         <span>{item.sku?.name ?? "Item"} ×{item.quantity}</span>
-                        <span className="font-medium">₱{(item.unit_price * item.quantity).toFixed(2)}</span>
+                        <span className="font-medium">S${(item.unit_price * item.quantity).toFixed(2)}</span>
                       </div>
                     ))}
                     <div className="border-t border-primary/10 pt-1 mt-1 flex justify-between font-semibold text-xs">
                       <span>Total</span>
-                      <span className="text-primary">₱{selectedOrder.subtotal.toFixed(2)}</span>
+                      <span className="text-primary">S${selectedOrder.subtotal.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
