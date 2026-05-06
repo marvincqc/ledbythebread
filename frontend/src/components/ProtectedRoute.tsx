@@ -4,24 +4,19 @@ import { useAuthStore } from "../store/authStore";
 import { supabase } from "../lib/supabase";
 import type { ReactNode } from "react";
 
-interface ProtectedRouteProps {
-  children: ReactNode;
-}
-
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isAdmin, isLoading, fetchProfile } = useAuthStore();
+export default function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { isAdmin, isLoading, fetchProfile, setUser } = useAuthStore();
   const [settling, setSettling] = useState(true);
 
-  // Handle OAuth redirect — Supabase puts the token in the URL hash.
-  // Give the client a moment to exchange it before deciding to redirect.
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        setUser(session.user);
         await fetchProfile(session.user.id);
       }
       setSettling(false);
     });
-  }, [fetchProfile]);
+  }, [fetchProfile, setUser]);
 
   if (isLoading || settling) {
     return (
@@ -35,7 +30,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  if (!user || !isAdmin) {
+  if (!isAdmin) {
     return <Navigate to="/admin/login" replace />;
   }
 
