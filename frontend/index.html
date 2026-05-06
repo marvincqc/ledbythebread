@@ -17,8 +17,153 @@
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
+
+    <style>
+      :root { --primary: #8B5E3C; --accent: #F4A261; --bg: #FFF8F0; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: var(--bg); font-family: 'Inter', sans-serif; }
+
+      #splash {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Nav skeleton */
+      #splash-nav {
+        background: #fff;
+        border-bottom: 1px solid rgba(139,94,60,0.1);
+        height: 64px;
+        display: flex;
+        align-items: center;
+        padding: 0 24px;
+        justify-content: space-between;
+      }
+      #splash-nav .logo {
+        font-family: 'Playfair Display', serif;
+        font-weight: 700;
+        font-size: 20px;
+        color: var(--primary);
+      }
+      #splash-nav .nav-skel {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .skel {
+        background: linear-gradient(90deg, rgba(139,94,60,0.08) 25%, rgba(139,94,60,0.15) 50%, rgba(139,94,60,0.08) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.4s infinite;
+        border-radius: 6px;
+      }
+      @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+
+      /* Hero skeleton */
+      #splash-hero {
+        text-align: center;
+        padding: 56px 24px 40px;
+        max-width: 640px;
+        margin: 0 auto;
+        width: 100%;
+      }
+      #splash-hero .badge {
+        display: inline-block;
+        background: rgba(244,162,97,0.2);
+        color: var(--primary);
+        font-weight: 600;
+        font-size: 13px;
+        padding: 4px 16px;
+        border-radius: 999px;
+        margin-bottom: 20px;
+      }
+      #splash-hero h1 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(32px, 7vw, 48px);
+        font-weight: 700;
+        color: var(--primary);
+        line-height: 1.2;
+        margin-bottom: 16px;
+      }
+      #splash-hero h1 span { color: var(--accent); }
+      #splash-hero p {
+        color: #7a6355;
+        font-size: 17px;
+        line-height: 1.6;
+        margin-bottom: 36px;
+      }
+
+      /* Card skeletons */
+      #splash-cards {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 24px 48px;
+        width: 100%;
+      }
+      #splash-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 24px;
+        overflow-x: auto;
+      }
+      #splash-tabs .tab {
+        flex-shrink: 0;
+        height: 36px;
+        border-radius: 999px;
+      }
+      #splash-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 20px;
+      }
+      .card-skel {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+        overflow: hidden;
+      }
+      .card-skel .img { height: 176px; }
+      .card-skel .body { padding: 16px; }
+      .card-skel .line { height: 14px; margin-bottom: 10px; border-radius: 4px; }
+      .card-skel .line.short { width: 55%; }
+      .card-skel .line.full { width: 100%; }
+      .card-skel .line.mid { width: 75%; }
+      .card-skel .btn { height: 40px; border-radius: 8px; margin-top: 16px; }
+    </style>
   </head>
-  <body class="bg-background font-body text-text-main antialiased">
+  <body>
+    <div id="splash">
+      <div id="splash-nav">
+        <span class="logo">🍞 Led by the Bread</span>
+        <div class="nav-skel">
+          <div class="skel" style="width:48px;height:14px;"></div>
+          <div class="skel" style="width:32px;height:32px;border-radius:50%;"></div>
+        </div>
+      </div>
+
+      <div id="splash-hero">
+        <div class="badge">Fresh Baked Daily</div>
+        <h1>Freshly Baked<br><span>Pandesal</span> Delivered</h1>
+        <p>Pre-order your favorite Filipino bread rolls for morning or evening delivery. Made fresh every day with love.</p>
+      </div>
+
+      <div id="splash-cards">
+        <div id="splash-tabs">
+          <div class="skel tab" style="width:56px;"></div>
+          <div class="skel tab" style="width:80px;"></div>
+          <div class="skel tab" style="width:96px;"></div>
+          <div class="skel tab" style="width:72px;"></div>
+        </div>
+        <div id="splash-grid">
+          <div class="card-skel"><div class="skel img"></div><div class="body"><div class="skel line short"></div><div class="skel line full"></div><div class="skel line mid"></div><div class="skel btn"></div></div></div>
+          <div class="card-skel"><div class="skel img"></div><div class="body"><div class="skel line short"></div><div class="skel line full"></div><div class="skel line mid"></div><div class="skel btn"></div></div></div>
+          <div class="card-skel"><div class="skel img"></div><div class="body"><div class="skel line short"></div><div class="skel line full"></div><div class="skel line mid"></div><div class="skel btn"></div></div></div>
+        </div>
+      </div>
+    </div>
+
     <div id="root"></div>
     <script src="/config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
