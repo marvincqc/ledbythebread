@@ -12,6 +12,7 @@ import OrderConfirmation from "./pages/OrderConfirmation";
 
 // Admin pages
 import AdminLogin from "./pages/admin/Login";
+import AdminCallback from "./pages/admin/Callback";
 import AdminDashboard from "./pages/admin/Dashboard";
 import SlotManagement from "./pages/admin/SlotManagement";
 import SkuManagement from "./pages/admin/SkuManagement";
@@ -38,6 +39,7 @@ export default function App() {
 
         {/* Admin login (no layout) */}
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/callback" element={<AdminCallback />} />
 
         {/* Protected admin routes */}
         <Route
