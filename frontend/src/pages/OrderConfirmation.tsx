@@ -5,11 +5,16 @@ import type { Order, OrderStatus } from "../types";
 import { CUSTOMER_STATUS_LABELS } from "../types";
 
 const TIMELINE_STEPS: { statuses: OrderStatus[]; label: string; icon: string }[] = [
-  { statuses: ["pending", "confirmed"], label: "Order Received", icon: "📋" },
-  { statuses: ["preparing", "ready"], label: "Being Prepared", icon: "👨‍🍳" },
-  { statuses: ["out_for_delivery"], label: "Out for Delivery", icon: "🛵" },
-  { statuses: ["delivered", "paid", "refunded"], label: "Delivered", icon: "✅" },
+  { statuses: ["pending"],             label: "Order Received",  icon: "📋" },
+  { statuses: ["confirmed"],           label: "Payment Verified", icon: "✅" },
+  { statuses: ["preparing"],           label: "Being Prepared",  icon: "👨‍🍳" },
+  { statuses: ["delivered"],           label: "Delivered",       icon: "🎉" },
 ];
+
+function formatOrderId(createdAt: string): string {
+  const d = new Date(createdAt);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}-${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
+}
 
 function getStepIndex(status: OrderStatus): number {
   for (let i = 0; i < TIMELINE_STEPS.length; i++) {
@@ -120,7 +125,7 @@ export default function OrderConfirmation() {
           Order Cancelled
         </h2>
         <p className="text-text-muted mb-6">
-          Order #{order.id.slice(0, 8).toUpperCase()} has been cancelled.
+          Order #{formatOrderId(order.created_at)} has been cancelled.
         </p>
         <Link to="/" className="btn-primary">
           Place a New Order
@@ -145,7 +150,7 @@ export default function OrderConfirmation() {
           Thank you, {guestName}! Your pandesal order is on its way.
         </p>
         <p className="font-mono text-xs text-text-muted mt-2 bg-white rounded px-2 py-1 inline-block">
-          Order ID: {order.id.toUpperCase()}
+          Order ID: {formatOrderId(order.created_at)}
         </p>
       </div>
 
@@ -238,7 +243,7 @@ export default function OrderConfirmation() {
           </div>
           <div className="flex gap-2">
             <span className="text-text-muted w-28 flex-shrink-0">Payment</span>
-            <span className="font-medium">Cash on Delivery (COD)</span>
+            <span className="font-medium">PayNow · Pending verification</span>
           </div>
         </div>
       </div>

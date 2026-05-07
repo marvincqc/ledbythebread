@@ -151,8 +151,10 @@ export default function SkuManagement() {
     if (!confirm(`Delete "${sku.name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from("skus").delete().eq("id", sku.id);
     if (!error) {
-      setSkus((prev) => prev.filter((s) => s.id !== sku.id));
-      setSavedSkus((prev) => prev.filter((s) => s.id !== sku.id));
+      const updated = skus.filter((s) => s.id !== sku.id);
+      setSkus(updated);
+      setSavedSkus(updated);
+      pageCache.set('admin-skus', updated);
       showMessage("success", `"${sku.name}" deleted.`);
     } else {
       showMessage("error", error.message);

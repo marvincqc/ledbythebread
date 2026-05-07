@@ -227,9 +227,12 @@ export default function Checkout() {
 
     setLoading(false);
 
-    if (fnError) { setError(fnError); return; }
+    if (fnError || !data?.order_id) {
+      setError(fnError ?? "Failed to place order. Please try again.");
+      return;
+    }
     clearCart();
-    navigate(`/order/${data!.order_id}`);
+    navigate(`/order/${data.order_id}`);
   };
 
   return (
