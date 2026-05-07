@@ -10,6 +10,9 @@ const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation"));
 
+// Auth callback
+const AuthCallback = lazy(() => import("./pages/auth/Callback"));
+
 // Admin pages (lazy-loaded)
 const AdminLogin = lazy(() => import("./pages/admin/Login"));
 const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
@@ -36,6 +39,9 @@ export default function App() {
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/order/:id" element={<OrderConfirmation />} />
         </Route>
+
+        {/* Auth callback — shared by customer + admin Google OAuth */}
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Admin login (no layout) */}
         <Route path="/admin/login" element={<AdminLogin />} />
