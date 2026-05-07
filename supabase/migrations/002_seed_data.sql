@@ -77,8 +77,8 @@ BEGIN
     IF EXTRACT(DOW FROM d) NOT IN (0, 6) THEN
       INSERT INTO delivery_slots (delivery_date, slot_type, max_orders, is_open)
       VALUES
-        (d, 'morning', 30, true),
-        (d, 'evening', 30, true)
+        (d, 'morning', 10, true),
+        (d, 'evening', 10, true)
       ON CONFLICT (delivery_date, slot_type) DO NOTHING;
     END IF;
   END LOOP;

@@ -4,14 +4,6 @@ import { supabase } from "../../lib/supabase";
 import type { AdminSetting } from "../../types";
 
 const CORE_SETTINGS: Record<string, { label: string; description: string; unit: string; min: number; max?: number; placeholder: string }> = {
-  max_weeks_out: {
-    label: "Maximum Weeks Out",
-    description: "How many weeks ahead customers can pre-order.",
-    unit: "weeks",
-    min: 1,
-    max: 8,
-    placeholder: "2",
-  },
   min_item_qty: {
     label: "Minimum Order Quantity",
     description: "Minimum quantity per item a customer must order.",
