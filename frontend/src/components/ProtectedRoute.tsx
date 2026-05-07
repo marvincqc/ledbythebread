@@ -37,7 +37,7 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!isAdmin) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/admin/login?error=access_denied" replace />;
   }
 
   return <>{children}</>;

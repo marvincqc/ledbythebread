@@ -32,6 +32,8 @@ export default function SkuManagement() {
   const [editingSku, setEditingSku] = useState<Sku | null>(null);
   const [form, setForm] = useState<SkuFormData>(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
@@ -59,11 +61,13 @@ export default function SkuManagement() {
   function openCreate() {
     setEditingSku(null);
     setForm(defaultForm);
+    setUploadError(null);
     setModalOpen(true);
   }
 
   function openEdit(sku: Sku) {
     setEditingSku(sku);
+    setUploadError(null);
     setForm({
       name: sku.name,
       description: sku.description ?? "",
@@ -74,6 +78,25 @@ export default function SkuManagement() {
       is_active: sku.is_active,
     });
     setModalOpen(true);
+  }
+
+  async function handleImageUpload(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    const filename = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
+    const { error } = await supabase.storage
+      .from("product-images")
+      .upload(filename, file, { upsert: true });
+    if (error) {
+      setUploadError(error.message);
+      setUploading(false);
+      return;
+    }
+    const { data: urlData } = supabase.storage
+      .from("product-images")
+      .getPublicUrl(filename);
+    setForm((prev) => ({ ...prev, image_url: urlData.publicUrl }));
+    setUploading(false);
   }
 
   async function handleSave() {
@@ -352,14 +375,64 @@ export default function SkuManagement() {
               </div>
 
               <div>
-                <label className="label">Image URL</label>
-                <input
-                  type="url"
-                  value={form.image_url}
-                  onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                  className="input"
-                  placeholder="https://..."
-                />
+                <label className="label">Image</label>
+                <div className="space-y-2">
+                  {/* File upload button */}
+                  <label className={`flex items-center gap-2 cursor-pointer w-fit px-3 py-2 rounded-button border border-primary/30 text-sm font-medium text-primary hover:bg-primary/5 transition-colors ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+                    {uploading ? (
+                      <>
+                        <span className="inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        Upload from computer
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+
+                  {/* Upload error */}
+                  {uploadError && (
+                    <p className="text-xs text-error">{uploadError}</p>
+                  )}
+
+                  {/* URL input */}
+                  <div>
+                    <span className="text-xs text-text-muted mb-1 block">Or paste image URL</span>
+                    <input
+                      type="url"
+                      value={form.image_url}
+                      onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                      className="input"
+                      placeholder="https://..."
+                    />
+                  </div>
+
+                  {/* Thumbnail preview */}
+                  {form.image_url && (
+                    <div className="mt-1">
+                      <img
+                        src={form.image_url}
+                        alt="Preview"
+                        className="w-20 h-20 object-cover rounded-lg border border-primary/20"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-6">

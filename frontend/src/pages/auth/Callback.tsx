@@ -1,82 +1,51 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
 
 export default function AuthCallback() {
-  const navigate = useNavigate();
-  const { setUser, fetchProfile, signOut } = useAuthStore();
-  const [error, setError] = useState<string | null>(null);
-  const [errorEmail, setErrorEmail] = useState<string | null>(null);
+  const { setUser, fetchProfile } = useAuthStore();
 
   useEffect(() => {
-    const intent = sessionStorage.getItem("auth_intent");
-    sessionStorage.removeItem("auth_intent");
+    const next = localStorage.getItem("auth_redirect") || "/";
+    localStorage.removeItem("auth_redirect");
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.user) {
-        setError("Sign-in failed. Please try again.");
-        return;
-      }
+    let done = false;
 
+    // Primary: onAuthStateChange fires reliably right after OAuth redirect
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (done || !session) return;
+      done = true;
       setUser(session.user);
       await fetchProfile(session.user.id);
-
-      const { isAdmin } = useAuthStore.getState();
-
-      if (isAdmin) {
-        navigate("/admin", { replace: true });
-        return;
-      }
-
-      // User tried to log in via admin login but doesn't have admin role
-      if (intent === "admin") {
-        setErrorEmail(session.user.email ?? null);
-        await signOut();
-        setError("This Google account does not have admin access.");
-        return;
-      }
-
-      // Regular customer callback
-      const returnTo = sessionStorage.getItem("auth_return_to") || "/";
-      sessionStorage.removeItem("auth_return_to");
-      navigate(returnTo, { replace: true });
+      window.location.replace(next);
     });
-  }, [navigate, setUser, fetchProfile, signOut]);
+
+    // Fallback: if onAuthStateChange doesn't fire within 5s
+    const timer = setTimeout(async () => {
+      if (done) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        done = true;
+        setUser(session.user);
+        await fetchProfile(session.user.id);
+        window.location.replace(next);
+      } else {
+        window.location.replace("/admin/login");
+      }
+    }, 5000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timer);
+    };
+  }, [setUser, fetchProfile]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      <div className="text-center max-w-sm w-full">
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
         <span className="text-5xl block mb-4">🍞</span>
-        {error ? (
-          <div className="card p-6">
-            <div className="w-12 h-12 bg-error/10 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-              </svg>
-            </div>
-            <p className="font-semibold text-text-main mb-1">{error}</p>
-            {errorEmail && (
-              <p className="text-text-muted text-sm mb-4">
-                Signed in as <span className="font-medium">{errorEmail}</span>
-              </p>
-            )}
-            <a
-              href="/admin/login"
-              className="block w-full bg-primary text-white text-sm font-medium px-4 py-2.5 rounded-button hover:bg-primary-dark transition-all mb-2"
-            >
-              Try a different account
-            </a>
-            <a href="/" className="text-text-muted text-sm hover:text-primary transition-colors">
-              Back to store
-            </a>
-          </div>
-        ) : (
-          <>
-            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-text-muted text-sm">Signing you in...</p>
-          </>
-        )}
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-text-muted text-sm">Signing you in…</p>
       </div>
     </div>
   );

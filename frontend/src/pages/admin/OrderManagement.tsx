@@ -6,7 +6,8 @@ import type { Order, OrderStatus, SlotType } from "../../types";
 import { STATUS_COLORS, STATUS_TRANSITIONS } from "../../types";
 
 interface Filters {
-  date: string;
+  dateFrom: string;
+  dateTo: string;
   slot: string;
   status: string;
   search: string;
@@ -16,7 +17,8 @@ export default function OrderManagement() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Filters>({
-    date: new Date().toISOString().split("T")[0],
+    dateFrom: new Date().toISOString().split("T")[0],
+    dateTo: new Date().toISOString().split("T")[0],
     slot: "",
     status: "",
     search: "",
@@ -28,7 +30,7 @@ export default function OrderManagement() {
 
   useEffect(() => {
     fetchOrders();
-  }, [filters.date, filters.slot, filters.status]);
+  }, [filters.dateFrom, filters.dateTo, filters.slot, filters.status]);
 
   async function fetchOrders() {
     setLoading(true);
@@ -39,7 +41,8 @@ export default function OrderManagement() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (filters.date) query = query.eq("delivery_date", filters.date);
+    if (filters.dateFrom) query = query.gte("delivery_date", filters.dateFrom);
+    if (filters.dateTo) query = query.lte("delivery_date", filters.dateTo);
     if (filters.slot) query = query.eq("slot_type", filters.slot as SlotType);
     if (filters.status) query = query.eq("status", filters.status);
 
@@ -127,13 +130,22 @@ export default function OrderManagement() {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Filters */}
-        <div className="card p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="card p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
-            <label className="label text-xs">Delivery Date</label>
+            <label className="label text-xs">From</label>
             <input
               type="date"
-              value={filters.date}
-              onChange={(e) => setFilters({ ...filters, date: e.target.value })}
+              value={filters.dateFrom}
+              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+              className="input text-sm py-2"
+            />
+          </div>
+          <div>
+            <label className="label text-xs">To</label>
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
               className="input text-sm py-2"
             />
           </div>

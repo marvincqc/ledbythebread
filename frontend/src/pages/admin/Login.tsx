@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
 
 export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const accessDenied = searchParams.get("error") === "access_denied";
+  const [error, setError] = useState<string | null>(
+    accessDenied ? "This Google account does not have admin access." : null
+  );
 
   const navigate = useNavigate();
   const { isAdmin, isLoading } = useAuthStore();
@@ -20,7 +24,7 @@ export default function AdminLogin() {
     setError(null);
     setLoading(true);
 
-    sessionStorage.setItem("auth_intent", "admin");
+    localStorage.setItem("auth_redirect", "/admin");
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
