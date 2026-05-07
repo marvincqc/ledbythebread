@@ -426,15 +426,22 @@ export default function Checkout() {
         {/* PayNow Payment */}
         <div className="card p-5">
           <h2 className="font-heading text-xl font-semibold text-primary mb-1">Payment</h2>
-          <p className="text-text-muted text-sm mb-4">Pay via PayNow, then upload your screenshot below.</p>
+          <p className="text-text-muted text-sm mb-4">Scan the QR code with your banking app, then upload your screenshot below.</p>
 
-          {payNowUen && (
-            <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 mb-4">
-              <p className="text-xs text-text-muted font-medium uppercase tracking-wide mb-1">PayNow UEN / Number</p>
-              <p className="font-heading text-lg font-bold text-primary tracking-wider">{payNowUen}</p>
-              <p className="text-text-muted text-xs mt-1">Amount: <span className="font-semibold text-text-main">S${sub.toFixed(2)}</span></p>
+          <div className="flex flex-col items-center mb-4">
+            <img
+              src="/paynow-qr.png"
+              alt="PayNow QR Code"
+              className="w-48 h-48 object-contain rounded-lg border border-primary/10"
+            />
+            <div className="mt-3 text-center">
+              <p className="text-sm text-text-muted">Amount to pay</p>
+              <p className="font-heading text-2xl font-bold text-primary">S${sub.toFixed(2)}</p>
+              {payNowUen && (
+                <p className="text-xs text-text-muted mt-1">UEN: <span className="font-medium text-text-main">{payNowUen}</span></p>
+              )}
             </div>
-          )}
+          </div>
 
           <div>
             <label className="label">Payment Screenshot <span className="text-error">*</span></label>
