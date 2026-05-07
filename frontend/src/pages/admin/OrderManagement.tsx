@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { supabase, callEdgeFunction } from "../../lib/supabase";
 import type { Order, OrderStatus, SlotType } from "../../types";
@@ -38,7 +38,16 @@ export default function OrderManagement() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const closeLightbox = useCallback(() => setLightboxUrl(null), []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") closeLightbox(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [closeLightbox]);
 
   useEffect(() => { fetchOrders(); }, [filters.dateFrom, filters.dateTo, filters.slot, filters.status]);
 
@@ -309,13 +318,21 @@ export default function OrderManagement() {
               {selectedOrder.metadata?.payment_proof_url && (
                 <div className="card p-4">
                   <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Payment Screenshot</p>
-                  <a href={selectedOrder.metadata.payment_proof_url as string} target="_blank" rel="noopener noreferrer">
+                  <button
+                    onClick={() => setLightboxUrl(selectedOrder.metadata!.payment_proof_url as string)}
+                    className="w-full group relative block rounded-lg overflow-hidden border border-primary/10 hover:border-primary/30 transition-colors"
+                  >
                     <img
                       src={selectedOrder.metadata.payment_proof_url as string}
                       alt="Payment proof"
-                      className="w-full rounded-lg border border-primary/10 hover:opacity-90 transition-opacity"
+                      className="w-full object-cover"
                     />
-                  </a>
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                      <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                        Click to enlarge
+                      </span>
+                    </div>
+                  </button>
                 </div>
               )}
 
@@ -345,6 +362,28 @@ export default function OrderManagement() {
           )}
         </div>
       </main>
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={closeLightbox}
+        >
+          <button
+            onClick={closeLightbox}
+            className="absolute top-4 right-4 w-9 h-9 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Payment proof"
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
