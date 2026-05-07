@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import type { AdminSetting } from "../../types";
+import { pageCache } from "../../lib/pageCache";
 
 const CORE_SETTINGS: Record<string, { label: string; description: string; unit: string; min: number; max?: number; placeholder: string }> = {
   min_item_qty: {
@@ -14,26 +15,32 @@ const CORE_SETTINGS: Record<string, { label: string; description: string; unit: 
 };
 
 export default function AdminSettings() {
-  const [settings, setSettings] = useState<AdminSetting[]>([]);
-  const [editValues, setEditValues] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<AdminSetting[]>(
+    () => pageCache.get<{ settings: AdminSetting[]; editValues: Record<string, string> }>('admin-settings')?.settings ?? []
+  );
+  const [editValues, setEditValues] = useState<Record<string, string>>(
+    () => pageCache.get<{ settings: AdminSetting[]; editValues: Record<string, string> }>('admin-settings')?.editValues ?? {}
+  );
+  const [loading, setLoading] = useState(!pageCache.get('admin-settings'));
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => { fetchSettings(); }, []);
 
   async function fetchSettings() {
-    setLoading(true);
+    if (!pageCache.get('admin-settings')) setLoading(true);
     try {
       const { data } = await supabase
         .from("admin_settings")
         .select("*")
         .in("key", Object.keys(CORE_SETTINGS));
       if (data) {
-        setSettings(data as AdminSetting[]);
+        const freshSettings = data as AdminSetting[];
         const vals: Record<string, string> = {};
-        (data as AdminSetting[]).forEach((s) => { vals[s.key] = s.value; });
+        freshSettings.forEach((s) => { vals[s.key] = s.value; });
+        setSettings(freshSettings);
         setEditValues(vals);
+        pageCache.set('admin-settings', { settings: freshSettings, editValues: vals });
       }
     } finally {
       setLoading(false);

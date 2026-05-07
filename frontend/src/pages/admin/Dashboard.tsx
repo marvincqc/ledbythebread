@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
 import type { Order } from "../../types";
 import { STATUS_COLORS } from "../../types";
+import { pageCache } from "../../lib/pageCache";
 
 interface DashboardStats {
   totalOrdersToday: number;
@@ -27,13 +28,20 @@ export default function AdminDashboard() {
     totalOrdersAllTime: 0,
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!pageCache.get('admin-dashboard'));
 
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
+    const cached = pageCache.get<{ stats: DashboardStats; recentOrders: Order[] }>('admin-dashboard');
+    if (cached) {
+      setStats(cached.stats);
+      setRecentOrders(cached.recentOrders);
+      setLoading(false);
+    }
+
     async function loadDashboard() {
-      setLoading(true);
+      if (!cached) setLoading(true);
       try {
       const [todayRes, allOrdersRes, recentRes] = await Promise.all([
         supabase
@@ -61,17 +69,22 @@ export default function AdminDashboard() {
           .filter((o) => !["pending", "cancelled"].includes(o.status))
           .reduce((sum, o) => sum + o.subtotal, 0);
 
-        setStats({
+        const freshStats = {
           totalOrdersToday: todayOrders.length,
           morningOrdersToday: morning.length,
           eveningOrdersToday: evening.length,
           revenueToday: revenue,
           pendingOrders: pending.length,
           totalOrdersAllTime: allOrdersRes.count ?? 0,
-        });
+        };
+        setStats(freshStats);
+
+        const freshOrders = (recentRes.data ?? []) as Order[];
+        setRecentOrders(freshOrders);
+        pageCache.set('admin-dashboard', { stats: freshStats, recentOrders: freshOrders });
       }
 
-      if (recentRes.data) {
+      if (recentRes.data && !todayRes.data) {
         setRecentOrders(recentRes.data as Order[]);
       }
       } finally {

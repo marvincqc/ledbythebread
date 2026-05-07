@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import type { Sku } from "../../types";
+import { pageCache } from "../../lib/pageCache";
 
 interface SkuFormData {
   name: string;
@@ -19,9 +20,9 @@ const defaultForm: SkuFormData = {
 };
 
 export default function SkuManagement() {
-  const [skus, setSkus] = useState<Sku[]>([]);
-  const [savedSkus, setSavedSkus] = useState<Sku[]>([]); // last saved state for discard
-  const [loading, setLoading] = useState(true);
+  const [skus, setSkus] = useState<Sku[]>(() => pageCache.get<Sku[]>('admin-skus') ?? []);
+  const [savedSkus, setSavedSkus] = useState<Sku[]>(() => pageCache.get<Sku[]>('admin-skus') ?? []); // last saved state for discard
+  const [loading, setLoading] = useState(!pageCache.get('admin-skus'));
   const [saving, setSavingState] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -65,7 +66,7 @@ export default function SkuManagement() {
   }, [dirty]);
 
   async function fetchData() {
-    setLoading(true);
+    if (!pageCache.get('admin-skus')) setLoading(true);
     const { data } = await supabase
       .from("skus")
       .select("*")
@@ -73,6 +74,7 @@ export default function SkuManagement() {
     if (data) {
       setSkus(data as Sku[]);
       setSavedSkus(data as Sku[]);
+      pageCache.set('admin-skus', data);
     }
     setLoading(false);
   }

@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { callEdgeFunction } from "../../lib/supabase";
 import type { Order, OrderStatus, SlotType } from "../../types";
 import { STATUS_COLORS, STATUS_TRANSITIONS, STATUS_ACTION_LABELS } from "../../types";
+import { pageCache } from "../../lib/pageCache";
 
 function formatOrderNo(createdAt: string): string {
   const d = new Date(createdAt);
@@ -24,8 +25,8 @@ interface Filters {
 }
 
 export default function OrderManagement() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>(() => pageCache.get<Order[]>('admin-orders') ?? []);
+  const [loading, setLoading] = useState(!pageCache.get('admin-orders'));
   const [filters, setFilters] = useState<Filters>({
     dateFrom: new Date().toISOString().split("T")[0],
     dateTo: new Date().toISOString().split("T")[0],
@@ -43,7 +44,8 @@ export default function OrderManagement() {
   }, [filters.dateFrom, filters.dateTo, filters.slot, filters.status]);
 
   async function fetchOrders() {
-    setLoading(true);
+    const hasCached = !!pageCache.get('admin-orders');
+    if (!hasCached) setLoading(true);
 
     // Fetch order headers only — no nested joins for the list
     let query = supabase
@@ -57,7 +59,10 @@ export default function OrderManagement() {
     if (filters.status) query = query.eq("status", filters.status);
 
     const { data } = await query;
-    if (data) setOrders(data as Order[]);
+    if (data) {
+      setOrders(data as Order[]);
+      pageCache.set('admin-orders', data);
+    }
     setLoading(false);
   }
 

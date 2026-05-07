@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import type { DeliverySlot, SlotType } from "../../types";
+import { pageCache } from "../../lib/pageCache";
 
 const DEFAULT_MAX = 10;
 
@@ -55,11 +56,11 @@ function groupByWeek(dates: string[]): { label: string; dates: string[] }[] {
 }
 
 export default function SlotManagement() {
-  const [slots, setSlots] = useState<DeliverySlot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [slots, setSlots] = useState<DeliverySlot[]>(() => pageCache.get<DeliverySlot[]>('admin-slots') ?? []);
+  const [savedSlots, setSavedSlots] = useState<DeliverySlot[]>(() => pageCache.get<DeliverySlot[]>('admin-slots') ?? []);
+  const [loading, setLoading] = useState(!pageCache.get('admin-slots'));
   const [weeksAhead, setWeeksAhead] = useState(2);
   const [savingWeeks, setSavingWeeks] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [editingCapacity, setEditingCapacity] = useState<{ id: string; value: string } | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const capacityInputRef = useRef<HTMLInputElement>(null);
@@ -71,7 +72,7 @@ export default function SlotManagement() {
   }, [editingCapacity]);
 
   async function init() {
-    setLoading(true);
+    if (!pageCache.get('admin-slots')) setLoading(true);
     try {
       // Fetch weeks setting
       const { data: setting } = await supabase
@@ -125,6 +126,7 @@ export default function SlotManagement() {
     });
     if (syncUpdates.length > 0) await Promise.all(syncUpdates);
     setSlots(synced);
+    setSavedSlots(synced);
 
     // Auto-generate missing slots silently (weekdays open, weekends closed, default 10)
     const toInsert: { delivery_date: string; slot_type: SlotType; max_orders: number; is_open: boolean; current_orders: number }[] = [];
@@ -146,8 +148,17 @@ export default function SlotManagement() {
     if (toInsert.length > 0) {
       const { data: inserted } = await supabase
         .from("delivery_slots").insert(toInsert).select();
-      if (inserted) setSlots((prev) => [...prev, ...(inserted as DeliverySlot[])]);
+      if (inserted) {
+        setSlots((prev) => {
+          const next = [...prev, ...(inserted as DeliverySlot[])];
+          setSavedSlots(next);
+          pageCache.set('admin-slots', next);
+          return next;
+        });
+        return;
+      }
     }
+    pageCache.set('admin-slots', synced);
   }
 
   async function updateWeeksAhead(newWeeks: number) {
@@ -160,29 +171,40 @@ export default function SlotManagement() {
     setSavingWeeks(false);
   }
 
-  async function toggleSlot(slot: DeliverySlot) {
-    setTogglingId(slot.id);
-    const { error } = await supabase
-      .from("delivery_slots").update({ is_open: !slot.is_open }).eq("id", slot.id);
-    if (!error) {
-      setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, is_open: !slot.is_open } : s));
-    } else {
-      showMessage("error", error.message);
-    }
-    setTogglingId(null);
+  function toggleSlot(slot: DeliverySlot) {
+    setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, is_open: !slot.is_open } : s));
   }
 
-  async function saveCapacity(slot: DeliverySlot, value: string) {
+  function saveCapacity(slot: DeliverySlot, value: string) {
     const max = parseInt(value);
     if (isNaN(max) || max < 1) { setEditingCapacity(null); return; }
     if (max === slot.max_orders) { setEditingCapacity(null); return; }
-    const { error } = await supabase
-      .from("delivery_slots").update({ max_orders: max }).eq("id", slot.id);
-    if (!error) {
-      setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, max_orders: max } : s));
-      showMessage("success", "Capacity updated.");
-    }
+    setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, max_orders: max } : s));
     setEditingCapacity(null);
+  }
+
+  async function saveAllSlots() {
+    const changed = slots.filter((s) => {
+      const saved = savedSlots.find((ss) => ss.id === s.id);
+      return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders);
+    });
+    if (changed.length === 0) return;
+    const updates = changed.map((s) =>
+      supabase.from("delivery_slots").update({ is_open: s.is_open, max_orders: s.max_orders }).eq("id", s.id)
+    );
+    const results = await Promise.all(updates);
+    const failed = results.filter((r) => r.error);
+    if (failed.length) {
+      showMessage("error", "Some changes failed to save. Please try again.");
+    } else {
+      setSavedSlots([...slots]);
+      pageCache.set('admin-slots', [...slots]);
+      showMessage("success", "All changes saved.");
+    }
+  }
+
+  function discardSlots() {
+    setSlots([...savedSlots]);
   }
 
   function showMessage(type: "success" | "error", text: string) {
@@ -203,8 +225,15 @@ export default function SlotManagement() {
   const openCount = weekdaySlots.filter((s) => s.is_open).length;
   const fullCount = weekdaySlots.filter((s) => s.is_open && s.current_orders >= s.max_orders).length;
 
+  // Dirty tracking
+  const changedSlots = slots.filter((s) => {
+    const saved = savedSlots.find((ss) => ss.id === s.id);
+    return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders);
+  });
+  const isDirty = changedSlots.length > 0;
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-24">
       <header className="bg-primary text-white px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/admin" className="text-white/70 hover:text-white">← Dashboard</Link>
@@ -258,14 +287,8 @@ export default function SlotManagement() {
           weeks.map((week, wi) => (
             <div key={wi} className="card overflow-hidden">
               {/* Week header */}
-              <div className="bg-primary/5 px-4 py-2.5 border-b border-primary/10 flex items-center justify-between">
+              <div className="bg-primary/5 px-4 py-2.5 border-b border-primary/10">
                 <span className="font-semibold text-primary text-sm">{week.label}</span>
-                <span className="text-xs text-text-muted">
-                  {week.dates.filter((d) => !isWeekend(d)).reduce((n, d) => {
-                    const m = getSlot(d, "morning"); const e = getSlot(d, "evening");
-                    return n + (m?.is_open ? 1 : 0) + (e?.is_open ? 1 : 0);
-                  }, 0)} open slots
-                </span>
               </div>
 
               <div className="divide-y divide-primary/5">
@@ -273,8 +296,14 @@ export default function SlotManagement() {
                 {week.dates.filter((d) => !isWeekend(d)).map((date) => {
                   const isToday = date === today;
                   const { weekday, date: dateLabel } = formatDay(date);
+                  const hasDateChange = (["morning", "evening"] as SlotType[]).some((type) => {
+                    const slot = getSlot(date, type);
+                    if (!slot) return false;
+                    const saved = savedSlots.find((ss) => ss.id === slot.id);
+                    return saved && (slot.is_open !== saved.is_open || slot.max_orders !== saved.max_orders);
+                  });
                   return (
-                    <div key={date} className={`flex items-center gap-3 px-4 py-3 ${isToday ? "bg-primary/5" : ""}`}>
+                    <div key={date} className={`flex items-center gap-3 px-4 py-3 ${hasDateChange ? "bg-yellow-50/60" : isToday ? "bg-primary/5" : ""}`}>
                       {/* Date */}
                       <div className="w-24 flex-shrink-0">
                         <span className={`text-xs font-medium ${isToday ? "text-primary" : "text-text-muted"}`}>{weekday}</span>
@@ -288,7 +317,6 @@ export default function SlotManagement() {
                           const slot = getSlot(date, type);
                           if (!slot) return null;
                           const isFull = slot.current_orders >= slot.max_orders;
-                          const isToggling = togglingId === slot.id;
                           return (
                             <div
                               key={type}
@@ -333,9 +361,8 @@ export default function SlotManagement() {
                                 {/* Toggle */}
                                 <button
                                   onClick={() => toggleSlot(slot)}
-                                  disabled={isToggling}
                                   title={slot.is_open ? "Click to close" : "Click to open"}
-                                  className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-60 ${
+                                  className={`relative w-10 h-5 rounded-full transition-colors ${
                                     slot.is_open ? "bg-green-500" : "bg-gray-300"
                                   }`}
                                 >
@@ -379,6 +406,34 @@ export default function SlotManagement() {
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-300 inline-block" />Closed</span>
         <span className="ml-auto">Click capacity number to edit · Toggle switch to open/close</span>
       </div>
+
+      {/* ── Sticky Save Bar ─────────────────────────────────── */}
+      {isDirty && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-primary/20 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="w-2 h-2 rounded-full bg-warning inline-block" />
+              <span className="text-text-muted">
+                <span className="font-semibold text-text-main">{changedSlots.length} slot{changedSlots.length !== 1 ? "s" : ""}</span> with unsaved changes
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={discardSlots}
+                className="text-sm text-text-muted hover:text-error font-medium transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={saveAllSlots}
+                className="btn-primary px-6 py-2 text-sm"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
