@@ -222,7 +222,6 @@ export default function SlotManagement() {
 
   // Summary stats
   const weekdaySlots = slots.filter((s) => !isWeekend(s.delivery_date));
-  const openCount = weekdaySlots.filter((s) => s.is_open).length;
   const fullCount = weekdaySlots.filter((s) => s.is_open && s.current_orders >= s.max_orders).length;
 
   // Dirty tracking
@@ -272,8 +271,7 @@ export default function SlotManagement() {
           </div>
           {/* Stats */}
           <div className="flex items-center gap-4 text-xs text-text-muted">
-            <span><span className="font-semibold text-green-700">{openCount}</span> open</span>
-            {fullCount > 0 && <span><span className="font-semibold text-orange-600">{fullCount}</span> full</span>}
+            {fullCount > 0 && <span><span className="font-semibold text-orange-600">{fullCount}</span> slot{fullCount !== 1 ? "s" : ""} full</span>}
           </div>
         </div>
       </div>
@@ -292,9 +290,9 @@ export default function SlotManagement() {
               </div>
 
               <div className="divide-y divide-primary/5">
-                {/* Weekday rows */}
-                {week.dates.filter((d) => !isWeekend(d)).map((date) => {
+                {week.dates.map((date) => {
                   const isToday = date === today;
+                  const weekend = isWeekend(date);
                   const { weekday, date: dateLabel } = formatDay(date);
                   const hasDateChange = (["morning", "evening"] as SlotType[]).some((type) => {
                     const slot = getSlot(date, type);
@@ -303,11 +301,11 @@ export default function SlotManagement() {
                     return saved && (slot.is_open !== saved.is_open || slot.max_orders !== saved.max_orders);
                   });
                   return (
-                    <div key={date} className={`flex items-center gap-3 px-4 py-3 ${hasDateChange ? "bg-yellow-50/60" : isToday ? "bg-primary/5" : ""}`}>
+                    <div key={date} className={`flex items-center gap-3 px-4 py-3 ${hasDateChange ? "bg-yellow-50/60" : isToday ? "bg-primary/5" : weekend ? "bg-gray-50/60" : ""}`}>
                       {/* Date */}
                       <div className="w-24 flex-shrink-0">
-                        <span className={`text-xs font-medium ${isToday ? "text-primary" : "text-text-muted"}`}>{weekday}</span>
-                        <p className={`text-sm font-semibold ${isToday ? "text-primary" : "text-text-main"}`}>{dateLabel}</p>
+                        <span className={`text-xs font-medium ${isToday ? "text-primary" : weekend ? "text-gray-400" : "text-text-muted"}`}>{weekday}</span>
+                        <p className={`text-sm font-semibold ${isToday ? "text-primary" : weekend ? "text-gray-400" : "text-text-main"}`}>{dateLabel}</p>
                         {isToday && <span className="text-xs text-primary font-medium">Today</span>}
                       </div>
 
@@ -331,7 +329,6 @@ export default function SlotManagement() {
                               <div className="px-3 py-2 flex items-center justify-between">
                                 <div>
                                   <span className="text-xs text-text-muted block">{type === "morning" ? "🌅 Morning" : "🌇 Evening"}</span>
-                                  {/* Inline capacity edit */}
                                   {editingCapacity?.id === slot.id ? (
                                     <input
                                       ref={capacityInputRef}
@@ -358,7 +355,6 @@ export default function SlotManagement() {
                                     </button>
                                   )}
                                 </div>
-                                {/* Toggle */}
                                 <button
                                   onClick={() => toggleSlot(slot)}
                                   title={slot.is_open ? "Click to close" : "Click to open"}
@@ -378,21 +374,6 @@ export default function SlotManagement() {
                     </div>
                   );
                 })}
-
-                {/* Weekend row — collapsed */}
-                {week.dates.some(isWeekend) && (
-                  <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50/80">
-                    <div className="w-24 flex-shrink-0">
-                      <span className="text-xs text-gray-400 font-medium">Sat – Sun</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                      <span className="text-xs font-medium">Weekend · Closed</span>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           ))
