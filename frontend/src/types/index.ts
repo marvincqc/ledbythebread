@@ -29,6 +29,8 @@ export interface Sku {
   is_bundle: boolean;
   bundle_components: BundleComponent[] | null;
   is_active: boolean;
+  is_promo: boolean;
+  sort_order: number;
   metadata: Record<string, unknown> | null;
   created_at: string;
   category?: Category;

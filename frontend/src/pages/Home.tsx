@@ -3,12 +3,10 @@ import { Link } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
 import { supabase } from "../lib/supabase";
-import type { Category, Sku } from "../types";
+import type { Sku } from "../types";
 
 export default function Home() {
-  const [categories, setCategories] = useState<Category[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
-  const [activeCategory, setActiveCategory] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
@@ -18,30 +16,20 @@ export default function Home() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const [catRes, skuRes] = await Promise.all([
-        supabase
-          .from("categories")
-          .select("*")
-          .order("sort_order", { ascending: true }),
-        supabase
-          .from("skus")
-          .select("*, category:categories(*)")
-          .eq("is_active", true)
-          .order("created_at", { ascending: true }),
-      ]);
-
-      if (catRes.data) setCategories(catRes.data as Category[]);
-      if (skuRes.data) setSkus(skuRes.data as unknown as Sku[]);
+      const { data } = await supabase
+        .from("skus")
+        .select("*")
+        .eq("is_active", true)
+        .order("is_promo", { ascending: false })
+        .order("sort_order", { ascending: true });
+      if (data) setSkus(data as Sku[]);
       setLoading(false);
     }
 
     load();
   }, []);
 
-  const filtered =
-    activeCategory === "all"
-      ? skus
-      : skus.filter((s) => s.category_id === activeCategory);
+  const filtered = skus;
 
   const handleAdd = (sku: Sku) => {
     addItem(sku);
@@ -75,7 +63,7 @@ export default function Home() {
           {[
             { label: "Made Fresh", value: "Daily" },
             { label: "Delivery Slots", value: "2x/day" },
-            { label: "Min. Order", value: "S$15" },
+            { label: "Min. Order", value: "5 sets" },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="font-heading font-bold text-2xl text-primary">{stat.value}</p>
@@ -100,32 +88,6 @@ export default function Home() {
         )}
       </section>
 
-      {/* Category tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
-        <button
-          onClick={() => setActiveCategory("all")}
-          className={`px-5 py-2 rounded-full font-medium text-sm whitespace-nowrap transition-all ${
-            activeCategory === "all"
-              ? "bg-primary text-white shadow-sm"
-              : "bg-white text-text-muted border border-primary/20 hover:border-primary/50"
-          }`}
-        >
-          All
-        </button>
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveCategory(cat.id)}
-            className={`px-5 py-2 rounded-full font-medium text-sm whitespace-nowrap transition-all ${
-              activeCategory === cat.id
-                ? "bg-primary text-white shadow-sm"
-                : "bg-white text-text-muted border border-primary/20 hover:border-primary/50"
-            }`}
-          >
-            {cat.name}
-          </button>
-        ))}
-      </div>
 
       {/* SKU grid */}
       {loading ? (
@@ -191,9 +153,9 @@ function SkuCard({
 
       {/* Body */}
       <div className="p-4 flex flex-col flex-1">
-        {sku.category && (
+        {sku.is_promo && (
           <span className="text-xs text-accent-dark font-semibold uppercase tracking-wide mb-1">
-            {sku.category.name}
+            Promo
           </span>
         )}
         <h3 className="font-heading font-semibold text-lg text-text-main mb-1 leading-snug">
@@ -210,7 +172,7 @@ function SkuCard({
           <p className="font-heading font-bold text-xl text-primary">
             S${sku.price.toFixed(2)}
             {!sku.is_bundle && (
-              <span className="text-xs font-normal text-text-muted ml-1">/pc</span>
+              <span className="text-xs font-normal text-text-muted ml-1">/set</span>
             )}
           </p>
 
