@@ -28,12 +28,17 @@ const ALL_STATUSES: OrderStatus[] = ["pending", "confirmed", "preparing", "deliv
 export default function OrderManagement() {
   const [orders, setOrders] = useState<Order[]>(() => pageCache.get<Order[]>('admin-orders') ?? []);
   const [loading, setLoading] = useState(!pageCache.get('admin-orders'));
-  const [filters, setFilters] = useState<Filters>({
-    dateFrom: new Date().toISOString().split("T")[0],
-    dateTo: new Date().toISOString().split("T")[0],
-    slot: "",
-    status: "",
-    search: "",
+  const [filters, setFilters] = useState<Filters>(() => {
+    const today = new Date();
+    const twoWeeksLater = new Date(today);
+    twoWeeksLater.setDate(today.getDate() + 13);
+    return {
+      dateFrom: today.toISOString().split("T")[0],
+      dateTo: twoWeeksLater.toISOString().split("T")[0],
+      slot: "",
+      status: "",
+      search: "",
+    };
   });
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
