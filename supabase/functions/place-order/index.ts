@@ -79,20 +79,22 @@ serve(async (req: Request) => {
       0
     );
 
-    // 5. Check min_order_amount setting
-    const { data: settingRow } = await supabase
+    // 5. Check min_item_qty setting (minimum sets per item)
+    const { data: minQtyRow } = await supabase
       .from("admin_settings")
       .select("value")
-      .eq("key", "min_order_amount")
+      .eq("key", "min_item_qty")
       .single();
 
-    const minOrderAmount = settingRow ? parseFloat(settingRow.value) : 150;
+    const minItemQty = minQtyRow ? parseInt(minQtyRow.value) : 6;
 
-    if (subtotal < minOrderAmount) {
-      return errorResponse(
-        `Minimum order amount is ₱${minOrderAmount.toFixed(2)}. Your subtotal is ₱${subtotal.toFixed(2)}.`,
-        400
-      );
+    for (const item of payload.items) {
+      if (item.quantity < minItemQty) {
+        return errorResponse(
+          `Minimum order is ${minItemQty} sets per item. Please update your cart.`,
+          400
+        );
+      }
     }
 
     // 6. Fetch the delivery slot

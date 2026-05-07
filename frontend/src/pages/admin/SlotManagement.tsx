@@ -41,15 +41,17 @@ export default function SlotManagement() {
 
   async function fetchSlots() {
     setLoading(true);
-    const { data } = await supabase
-      .from("delivery_slots")
-      .select("*")
-      .in("delivery_date", dates)
-      .order("delivery_date", { ascending: true })
-      .order("slot_type", { ascending: true });
-
-    if (data) setSlots(data as DeliverySlot[]);
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from("delivery_slots")
+        .select("*")
+        .in("delivery_date", dates)
+        .order("delivery_date", { ascending: true })
+        .order("slot_type", { ascending: true });
+      if (data) setSlots(data as DeliverySlot[]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function getSlot(date: string, slotType: SlotType): DeliverySlot | undefined {

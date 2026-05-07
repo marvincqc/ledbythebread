@@ -196,6 +196,16 @@ export default function Checkout() {
       return;
     }
 
+    // Validate minimum sets per item
+    const { data: minQtyRow } = await supabase
+      .from("admin_settings").select("value").eq("key", "min_item_qty").single();
+    const minQty = minQtyRow ? parseInt(minQtyRow.value) : 6;
+    const belowMin = items.find((i) => i.quantity < minQty);
+    if (belowMin) {
+      setError(`Minimum is ${minQty} sets per item. "${belowMin.sku.name}" has ${belowMin.quantity}.`);
+      return;
+    }
+
     if (!proofUrl) {
       setError("Please upload your PayNow payment screenshot before placing your order.");
       return;

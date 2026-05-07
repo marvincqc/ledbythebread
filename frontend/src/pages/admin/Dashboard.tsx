@@ -34,7 +34,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function loadDashboard() {
       setLoading(true);
-
+      try {
       const [todayRes, allOrdersRes, recentRes] = await Promise.all([
         supabase
           .from("orders")
@@ -74,8 +74,9 @@ export default function AdminDashboard() {
       if (recentRes.data) {
         setRecentOrders(recentRes.data as Order[]);
       }
-
-      setLoading(false);
+      } finally {
+        setLoading(false);
+      }
     }
 
     loadDashboard();

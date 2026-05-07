@@ -1,16 +1,23 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
-
-const MIN_ORDER = 15;
+import { supabase } from "../lib/supabase";
 
 export default function CartPanel() {
   const { items, updateQuantity, removeItem, closeCart, subtotal, totalItems } =
     useCartStore();
   const navigate = useNavigate();
+  const [minQty, setMinQty] = useState(6);
+
+  useEffect(() => {
+    supabase.from("admin_settings").select("value").eq("key", "min_item_qty").single()
+      .then(({ data }) => { if (data) setMinQty(parseInt(data.value) || 6); });
+  }, []);
 
   const sub = subtotal();
   const total = totalItems();
-  const belowMin = sub < MIN_ORDER;
+  const belowMinItems = items.filter((i) => i.quantity < minQty);
+  const belowMin = belowMinItems.length > 0;
 
   const handleCheckout = () => {
     closeCart();
@@ -144,10 +151,11 @@ export default function CartPanel() {
         {/* Footer */}
         {items.length > 0 && (
           <div className="border-t border-primary/10 px-5 py-4 space-y-3">
-            {/* Minimum order warning */}
+            {/* Minimum qty warning */}
             {belowMin && (
               <div className="bg-error/10 border border-error/20 rounded-lg px-3 py-2 text-error text-sm">
-                Add S${(MIN_ORDER - sub).toFixed(2)} more to meet the S${MIN_ORDER} minimum order.
+                Minimum is {minQty} sets per item. Please update{" "}
+                {belowMinItems.map((i) => i.sku.name).join(", ")}.
               </div>
             )}
 
