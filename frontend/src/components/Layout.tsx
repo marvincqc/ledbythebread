@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
-import { supabase } from "../lib/supabase";
 import CartPanel from "./CartPanel";
 
 const GoogleIcon = () => (
@@ -48,13 +47,7 @@ export default function Layout() {
     navigate("/");
   };
 
-  const handleGoogleSignIn = async () => {
-    sessionStorage.setItem("auth_return_to", location.pathname);
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-  };
+  const loginHref = { pathname: "/login", state: { from: location.pathname } };
 
   const displayName = profile?.full_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "Account";
 
@@ -90,13 +83,13 @@ export default function Layout() {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={handleGoogleSignIn}
+              <Link
+                to={loginHref}
                 className="flex items-center gap-2 text-sm font-medium border border-primary/20 hover:border-primary/50 hover:bg-primary/5 px-3 py-1.5 rounded-button transition-colors text-text-muted hover:text-primary"
               >
                 <GoogleIcon />
                 Sign In
-              </button>
+              </Link>
             )}
 
             <CartButton onClick={openCart} totalItems={totalItems} />
@@ -142,13 +135,14 @@ export default function Layout() {
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => { setMobileMenuOpen(false); handleGoogleSignIn(); }}
-                className="flex items-center gap-2 py-2 text-text-muted hover:text-primary font-medium w-full"
+              <Link
+                to={loginHref}
+                className="flex items-center gap-2 py-2 text-text-muted hover:text-primary font-medium"
+                onClick={() => setMobileMenuOpen(false)}
               >
                 <GoogleIcon />
                 Sign in with Google
-              </button>
+              </Link>
             )}
           </div>
         )}
