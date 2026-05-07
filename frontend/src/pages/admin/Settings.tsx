@@ -36,6 +36,15 @@ const KNOWN_SETTINGS: Record<string, SettingMeta> = {
     default: "2",
     placeholder: "2",
   },
+  min_item_qty: {
+    label: "Minimum Item Quantity",
+    description: "Minimum quantity per item that a customer must order.",
+    type: "number",
+    min: 1,
+    unit: "pcs",
+    default: "6",
+    placeholder: "6",
+  },
   // Optional custom settings
   delivery_fee: {
     label: "Delivery Fee",
@@ -108,7 +117,7 @@ const KNOWN_SETTINGS: Record<string, SettingMeta> = {
   },
 };
 
-const CORE_KEYS = new Set(["min_order_amount", "max_weeks_out"]);
+const CORE_KEYS = new Set(["min_order_amount", "max_weeks_out", "min_item_qty"]);
 
 export default function AdminSettings() {
   const [settings, setSettings] = useState<AdminSetting[]>([]);

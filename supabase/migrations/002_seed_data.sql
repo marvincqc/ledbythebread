@@ -14,7 +14,8 @@ ON CONFLICT DO NOTHING;
 -- ---- ADMIN SETTINGS ----
 INSERT INTO admin_settings (key, value) VALUES
   ('min_order_amount', '15'),
-  ('max_weeks_out',    '2')
+  ('max_weeks_out',    '2'),
+  ('min_item_qty',     '6')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- ---- SKUS (SGD prices + Unsplash images) ----
