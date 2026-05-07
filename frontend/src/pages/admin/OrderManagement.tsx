@@ -22,6 +22,7 @@ export default function OrderManagement() {
     search: "",
   });
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -32,9 +33,10 @@ export default function OrderManagement() {
   async function fetchOrders() {
     setLoading(true);
 
+    // Fetch order headers only — no nested joins for the list
     let query = supabase
       .from("orders")
-      .select(`*, order_items(*, sku:skus(*))`)
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (filters.date) query = query.eq("delivery_date", filters.date);
@@ -42,8 +44,24 @@ export default function OrderManagement() {
     if (filters.status) query = query.eq("status", filters.status);
 
     const { data } = await query;
-    if (data) setOrders(data as unknown as Order[]);
+    if (data) setOrders(data as Order[]);
     setLoading(false);
+  }
+
+  async function selectOrder(order: Order) {
+    setSelectedOrder(order);
+    if (order.order_items) return; // already loaded
+    setLoadingDetail(true);
+    const { data } = await supabase
+      .from("order_items")
+      .select("*, sku:skus(*)")
+      .eq("order_id", order.id);
+    if (data) {
+      const withItems = { ...order, order_items: data };
+      setSelectedOrder(withItems);
+      setOrders((prev) => prev.map((o) => o.id === order.id ? withItems : o));
+    }
+    setLoadingDetail(false);
   }
 
   const filteredOrders = orders.filter((o) => {
@@ -203,7 +221,7 @@ export default function OrderManagement() {
                             className={`hover:bg-background/50 cursor-pointer transition-colors ${
                               selectedOrder?.id === order.id ? "bg-primary/5" : ""
                             }`}
-                            onClick={() => setSelectedOrder(order)}
+                            onClick={() => selectOrder(order)}
                           >
                             <td className="px-4 py-3">
                               <span className="font-mono text-xs text-text-muted">
@@ -307,9 +325,13 @@ export default function OrderManagement() {
               </div>
 
               {/* Items */}
-              {selectedOrder.order_items && (
-                <div className="mt-4 pt-3 border-t border-primary/10">
-                  <p className="text-xs text-text-muted font-medium mb-2">Items</p>
+              <div className="mt-4 pt-3 border-t border-primary/10">
+                <p className="text-xs text-text-muted font-medium mb-2">Items</p>
+                {loadingDetail ? (
+                  <div className="flex justify-center py-3">
+                    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : selectedOrder.order_items ? (
                   <div className="space-y-1">
                     {selectedOrder.order_items.map((item) => (
                       <div key={item.id} className="flex justify-between text-xs">
@@ -322,8 +344,8 @@ export default function OrderManagement() {
                       <span className="text-primary">S${selectedOrder.subtotal.toFixed(2)}</span>
                     </div>
                   </div>
-                </div>
-              )}
+                ) : null}
+              </div>
 
               {/* Quick status change */}
               {(STATUS_TRANSITIONS[selectedOrder.status as OrderStatus] ?? []).length > 0 && (
