@@ -20,6 +20,7 @@ export default function AdminLogin() {
     setError(null);
     setLoading(true);
 
+    sessionStorage.setItem("auth_intent", "admin");
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

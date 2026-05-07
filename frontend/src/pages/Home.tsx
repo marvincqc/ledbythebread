@@ -84,9 +84,9 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Admin links */}
-        <div className="flex items-center justify-center gap-4">
-          {isAdmin ? (
+        {/* Admin shortcut — only shown when already logged in as admin */}
+        {isAdmin && (
+          <div className="flex items-center justify-center">
             <Link
               to="/admin"
               className="flex items-center gap-2 bg-primary text-white text-sm font-medium px-4 py-2 rounded-button hover:bg-primary-dark transition-all"
@@ -96,15 +96,8 @@ export default function Home() {
               </svg>
               Admin Dashboard
             </Link>
-          ) : (
-            <Link
-              to="/admin/login"
-              className="text-text-muted/50 hover:text-text-muted text-xs transition-colors"
-            >
-              Admin login
-            </Link>
-          )}
-        </div>
+          </div>
+        )}
       </section>
 
       {/* Category tabs */}
