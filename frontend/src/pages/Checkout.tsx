@@ -55,11 +55,45 @@ export default function Checkout() {
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
 
+  // PayNow proof
+  const [payNowUen, setPayNowUen] = useState<string | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [proofUrl, setProofUrl] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const sub = subtotal();
   const dates = getNextDays(14);
+
+  useEffect(() => {
+    supabase.from("admin_settings").select("value").eq("key", "paynow_uen").single()
+      .then(({ data }) => { if (data) setPayNowUen(data.value); });
+  }, []);
+
+  async function handleProofUpload(file: File) {
+    setProofFile(file);
+    setProofPreview(URL.createObjectURL(file));
+    setUploadingProof(true);
+    setProofUrl(null);
+
+    const filename = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
+    const { error: uploadError } = await supabase.storage
+      .from("payment-proofs")
+      .upload(filename, file, { upsert: true });
+
+    if (uploadError) {
+      setError("Failed to upload payment proof: " + uploadError.message);
+      setProofFile(null);
+      setProofPreview(null);
+    } else {
+      const { data: urlData } = supabase.storage.from("payment-proofs").getPublicUrl(filename);
+      setProofUrl(urlData.publicUrl);
+    }
+    setUploadingProof(false);
+  }
 
   useEffect(() => {
     async function fetchSlots() {
@@ -162,6 +196,11 @@ export default function Checkout() {
       return;
     }
 
+    if (!proofUrl) {
+      setError("Please upload your PayNow payment screenshot before placing your order.");
+      return;
+    }
+
     setLoading(true);
 
     const { data, error: fnError } = await callEdgeFunction<{ order_id: string }>("place-order", {
@@ -173,6 +212,7 @@ export default function Checkout() {
       delivery_date: selectedDate,
       slot_type: selectedSlot,
       items: items.map((i) => ({ sku_id: i.sku.id, quantity: i.quantity, unit_price: i.sku.price })),
+      metadata: { payment_proof_url: proofUrl },
     });
 
     setLoading(false);
@@ -373,6 +413,56 @@ export default function Checkout() {
           </div>
         </div>
 
+        {/* PayNow Payment */}
+        <div className="card p-5">
+          <h2 className="font-heading text-xl font-semibold text-primary mb-1">Payment</h2>
+          <p className="text-text-muted text-sm mb-4">Pay via PayNow, then upload your screenshot below.</p>
+
+          {payNowUen && (
+            <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 mb-4">
+              <p className="text-xs text-text-muted font-medium uppercase tracking-wide mb-1">PayNow UEN / Number</p>
+              <p className="font-heading text-lg font-bold text-primary tracking-wider">{payNowUen}</p>
+              <p className="text-text-muted text-xs mt-1">Amount: <span className="font-semibold text-text-main">S${sub.toFixed(2)}</span></p>
+            </div>
+          )}
+
+          <div>
+            <label className="label">Payment Screenshot <span className="text-error">*</span></label>
+            <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-card p-6 cursor-pointer transition-all ${
+              proofUrl ? "border-success bg-success/5" : "border-primary/30 hover:border-primary/60 hover:bg-primary/5"
+            }`}>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleProofUpload(f); }}
+                disabled={uploadingProof}
+              />
+              {uploadingProof ? (
+                <>
+                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm text-text-muted">Uploading…</span>
+                </>
+              ) : proofPreview ? (
+                <>
+                  <img src={proofPreview} alt="Payment proof" className="max-h-40 rounded-lg object-contain" />
+                  <span className="text-xs text-success font-medium">
+                    {proofUrl ? "✓ Uploaded — tap to replace" : "Uploading…"}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-8 h-8 text-primary/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm font-medium text-primary">Tap to upload screenshot</span>
+                  <span className="text-xs text-text-muted">JPG, PNG accepted</span>
+                </>
+              )}
+            </label>
+          </div>
+        </div>
+
         {/* Order Summary */}
         <div className="card p-5">
           <h2 className="font-heading text-xl font-semibold text-primary mb-4">Order Summary</h2>
@@ -404,17 +494,21 @@ export default function Checkout() {
           </div>
         )}
 
-        <button type="submit" disabled={loading} className="w-full btn-primary py-4 text-base">
+        <button
+          type="submit"
+          disabled={loading || uploadingProof || !proofUrl}
+          className="w-full btn-primary py-4 text-base"
+        >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Placing Order...
+              Placing Order…
             </span>
-          ) : "Place Order (Cash on Delivery)"}
+          ) : !proofUrl ? "Upload payment screenshot to continue" : "Place Order"}
         </button>
 
         <p className="text-center text-xs text-text-muted">
-          By placing this order, you agree to pay upon delivery (COD). No payment is charged now.
+          Payment is verified via PayNow screenshot. Your order will be confirmed once payment is checked.
         </p>
       </form>
     </div>

@@ -26,7 +26,7 @@ INSERT INTO skus (id, name, description, price, category_id, image_url, is_activ
     'Soft and fluffy classic Filipino bread roll dusted with breadcrumbs. Best enjoyed warm.',
     1.50,
     'a1000000-0000-0000-0000-000000000001',
-    'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&q=80',
+    '/images/classic-pandesal.jpeg',
     true
   ),
   (
@@ -35,7 +35,7 @@ INSERT INTO skus (id, name, description, price, category_id, image_url, is_activ
     'Nutritious whole wheat version with a slightly nutty flavor. A healthier choice without sacrificing taste.',
     2.00,
     'a1000000-0000-0000-0000-000000000002',
-    'https://images.unsplash.com/photo-1586444248902-2f64eddc13df?w=400&q=80',
+    '/images/ube-pandesal.jpeg',
     true
   ),
   (

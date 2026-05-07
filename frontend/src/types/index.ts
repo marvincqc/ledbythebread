@@ -1,7 +1,3 @@
-// ============================================================
-// Domain types for Led by the Bread
-// ============================================================
-
 export type UserRole = "customer" | "admin";
 
 export interface Profile {
@@ -35,7 +31,6 @@ export interface Sku {
   is_active: boolean;
   metadata: Record<string, unknown> | null;
   created_at: string;
-  // joined
   category?: Category;
 }
 
@@ -43,7 +38,7 @@ export type SlotType = "morning" | "evening";
 
 export interface DeliverySlot {
   id: string;
-  delivery_date: string; // YYYY-MM-DD
+  delivery_date: string;
   slot_type: SlotType;
   max_orders: number;
   current_orders: number;
@@ -55,12 +50,8 @@ export type OrderStatus =
   | "pending"
   | "confirmed"
   | "preparing"
-  | "ready"
-  | "out_for_delivery"
   | "delivered"
-  | "paid"
-  | "cancelled"
-  | "refunded";
+  | "cancelled";
 
 export interface GuestInfo {
   name: string;
@@ -80,7 +71,7 @@ export interface Order {
   subtotal: number;
   status: OrderStatus;
   created_at: string;
-  // joined
+  metadata?: Record<string, unknown> | null;
   order_items?: OrderItemWithSku[];
   profile?: Profile;
 }
@@ -112,47 +103,44 @@ export interface SlotOverride {
   custom_data: Record<string, unknown> | null;
 }
 
-// Cart types
 export interface CartItem {
   sku: Sku;
   quantity: number;
 }
 
-// Valid status transitions (mirroring edge function logic)
+// Simplified 5-status workflow:
+// pending (awaiting PayNow proof) → confirmed (payment verified) →
+// preparing (in production) → delivered — or → cancelled at any point
 export const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pending: ["confirmed", "cancelled"],
-  confirmed: ["preparing", "cancelled"],
-  preparing: ["ready"],
-  ready: ["out_for_delivery"],
-  out_for_delivery: ["delivered"],
-  delivered: ["paid"],
-  paid: ["refunded"],
-  cancelled: [],
-  refunded: [],
+  pending:    ["confirmed", "cancelled"],
+  confirmed:  ["preparing", "cancelled"],
+  preparing:  ["delivered", "cancelled"],
+  delivered:  [],
+  cancelled:  [],
+};
+
+// Human-readable action labels for admin dropdown
+export const STATUS_ACTION_LABELS: Record<string, string> = {
+  confirmed:  "✓ Verify Payment",
+  preparing:  "Start Preparing",
+  delivered:  "Mark Delivered",
+  cancelled:  "Cancel Order",
 };
 
 // Customer-facing status labels
 export const CUSTOMER_STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: "Order Received",
-  confirmed: "Order Received",
-  preparing: "Being Prepared",
-  ready: "Being Prepared",
-  out_for_delivery: "Out for Delivery",
-  delivered: "Delivered",
-  paid: "Delivered",
-  cancelled: "Cancelled",
-  refunded: "Refunded",
+  pending:    "Order Received",
+  confirmed:  "Order Confirmed",
+  preparing:  "Being Prepared",
+  delivered:  "Delivered",
+  cancelled:  "Cancelled",
 };
 
 // Admin status badge colors
-export const STATUS_COLORS: Record<OrderStatus, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-blue-100 text-blue-800",
-  preparing: "bg-purple-100 text-purple-800",
-  ready: "bg-indigo-100 text-indigo-800",
-  out_for_delivery: "bg-orange-100 text-orange-800",
-  delivered: "bg-green-100 text-green-800",
-  paid: "bg-green-200 text-green-900",
-  cancelled: "bg-red-100 text-red-800",
-  refunded: "bg-gray-100 text-gray-800",
+export const STATUS_COLORS: Record<string, string> = {
+  pending:    "bg-yellow-100 text-yellow-800",
+  confirmed:  "bg-blue-100 text-blue-800",
+  preparing:  "bg-purple-100 text-purple-800",
+  delivered:  "bg-green-100 text-green-800",
+  cancelled:  "bg-red-100 text-red-800",
 };

@@ -9,15 +9,11 @@ const corsHeaders = {
 
 // Valid status transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
-  pending:          ["confirmed", "cancelled"],
-  confirmed:        ["preparing", "cancelled"],
-  preparing:        ["ready"],
-  ready:            ["out_for_delivery"],
-  out_for_delivery: ["delivered"],
-  delivered:        ["paid"],
-  paid:             ["refunded"],
-  cancelled:        [],
-  refunded:         [],
+  pending:   ["confirmed", "cancelled"],
+  confirmed: ["preparing", "cancelled"],
+  preparing: ["delivered", "cancelled"],
+  delivered: [],
+  cancelled: [],
 };
 
 // Statuses where cancellation should decrement slot count

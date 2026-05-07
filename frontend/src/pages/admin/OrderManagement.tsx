@@ -3,7 +3,17 @@ import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { callEdgeFunction } from "../../lib/supabase";
 import type { Order, OrderStatus, SlotType } from "../../types";
-import { STATUS_COLORS, STATUS_TRANSITIONS } from "../../types";
+import { STATUS_COLORS, STATUS_TRANSITIONS, STATUS_ACTION_LABELS } from "../../types";
+
+function formatOrderNo(createdAt: string): string {
+  const d = new Date(createdAt);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}-${hh}${min}`;
+}
 
 interface Filters {
   dateFrom: string;
@@ -210,7 +220,7 @@ export default function OrderManagement() {
                 <table className="w-full text-sm">
                   <thead className="bg-background">
                     <tr>
-                      {["Order", "Customer", "Slot", "Subtotal", "Status", "Actions"].map((h) => (
+                      {["Order No.", "Customer", "Delivery", "Subtotal", "Status", "Actions"].map((h) => (
                         <th key={h} className="px-4 py-3 text-left text-xs text-text-muted font-medium uppercase tracking-wide">
                           {h}
                         </th>
@@ -236,19 +246,17 @@ export default function OrderManagement() {
                             onClick={() => selectOrder(order)}
                           >
                             <td className="px-4 py-3">
-                              <span className="font-mono text-xs text-text-muted">
-                                {order.id.slice(0, 8).toUpperCase()}
+                              <span className="font-mono text-xs font-semibold text-text-main">
+                                {formatOrderNo(order.created_at)}
                               </span>
-                              <div className="text-xs text-text-muted mt-0.5">
-                                {new Date(order.created_at).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
-                              </div>
                             </td>
                             <td className="px-4 py-3">
                               <div className="font-medium">{order.guest_info?.name ?? "—"}</div>
                               <div className="text-xs text-text-muted">{order.guest_info?.phone}</div>
                             </td>
-                            <td className="px-4 py-3 capitalize text-text-muted text-xs">
-                              {order.slot_type}
+                            <td className="px-4 py-3">
+                              <div className="text-xs font-medium text-text-main">{order.delivery_date}</div>
+                              <div className="text-xs text-text-muted capitalize">{order.slot_type}</div>
                             </td>
                             <td className="px-4 py-3 font-semibold text-primary">
                               S${order.subtotal.toFixed(2)}
@@ -271,9 +279,9 @@ export default function OrderManagement() {
                                   disabled={updatingId === order.id}
                                   className="text-xs border border-primary/30 rounded-button px-2 py-1 bg-white text-text-main focus:outline-none focus:ring-1 focus:ring-primary"
                                 >
-                                  <option value="">Update →</option>
+                                  <option value="">Action…</option>
                                   {nextStatuses.map((s) => (
-                                    <option key={s} value={s}>{s}</option>
+                                    <option key={s} value={s}>{STATUS_ACTION_LABELS[s] ?? s}</option>
                                   ))}
                                 </select>
                               )}
@@ -336,6 +344,20 @@ export default function OrderManagement() {
                 </div>
               </div>
 
+              {/* Payment proof */}
+              {selectedOrder.metadata?.payment_proof_url && (
+                <div className="mt-4 pt-3 border-t border-primary/10">
+                  <p className="text-xs text-text-muted font-medium mb-2">Payment Screenshot</p>
+                  <a href={selectedOrder.metadata.payment_proof_url as string} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={selectedOrder.metadata.payment_proof_url as string}
+                      alt="Payment proof"
+                      className="w-full rounded-lg border border-primary/10 hover:opacity-90 transition-opacity"
+                    />
+                  </a>
+                </div>
+              )}
+
               {/* Items */}
               <div className="mt-4 pt-3 border-t border-primary/10">
                 <p className="text-xs text-text-muted font-medium mb-2">Items</p>
@@ -369,9 +391,13 @@ export default function OrderManagement() {
                         key={s}
                         onClick={() => updateStatus(selectedOrder, s)}
                         disabled={updatingId === selectedOrder.id}
-                        className="text-xs px-3 py-1.5 rounded-button bg-primary/10 hover:bg-primary/20 text-primary font-medium transition-colors disabled:opacity-50"
+                        className={`text-xs px-3 py-1.5 rounded-button font-medium transition-colors disabled:opacity-50 ${
+                          s === "cancelled"
+                            ? "bg-error/10 hover:bg-error/20 text-error"
+                            : "bg-primary/10 hover:bg-primary/20 text-primary"
+                        }`}
                       >
-                        → {s}
+                        {STATUS_ACTION_LABELS[s] ?? s}
                       </button>
                     ))}
                   </div>
