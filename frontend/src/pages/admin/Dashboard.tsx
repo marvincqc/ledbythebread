@@ -258,7 +258,7 @@ export default function AdminDashboard() {
                       recentOrders.map((order) => (
                         <tr key={order.id} className="hover:bg-background/50 transition-colors">
                           <td className="px-5 py-3 font-mono text-xs text-text-muted">
-                            {order.id.slice(0, 8).toUpperCase()}
+                            {(() => { const d = new Date(order.created_at); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}-${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`; })()}
                           </td>
                           <td className="px-5 py-3">
                             {order.guest_info?.name ?? "Registered user"}

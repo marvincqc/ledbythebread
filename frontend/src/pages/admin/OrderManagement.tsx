@@ -5,8 +5,14 @@ import type { Order, OrderStatus, SlotType } from "../../types";
 import { STATUS_COLORS, STATUS_ACTION_LABELS } from "../../types";
 import { pageCache } from "../../lib/pageCache";
 
-function formatOrderId(id: string): string {
-  return id.slice(0, 8).toUpperCase();
+function formatOrderId(createdAt: string): string {
+  const d = new Date(createdAt);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}-${hh}${min}`;
 }
 
 interface Filters {
@@ -208,7 +214,7 @@ export default function OrderManagement() {
                           }`}
                         >
                           <td className="px-4 py-3">
-                            <span className="font-mono text-xs font-bold text-text-main">{formatOrderId(order.id)}</span>
+                            <span className="font-mono text-xs font-bold text-text-main">{formatOrderId(order.created_at)}</span>
                           </td>
                           <td className="px-4 py-3">
                             <div className="font-medium text-text-main">{order.guest_info?.name ?? "—"}</div>
@@ -241,7 +247,7 @@ export default function OrderManagement() {
               {/* Header */}
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="font-mono text-xs font-bold text-text-muted">{formatOrderId(selectedOrder.id)}</span>
+                  <span className="font-mono text-xs font-bold text-text-muted">{formatOrderId(selectedOrder.created_at)}</span>
                   <button onClick={() => setSelectedOrder(null)} className="text-text-muted hover:text-primary">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
