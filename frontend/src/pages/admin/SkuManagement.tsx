@@ -82,13 +82,22 @@ export default function SkuManagement() {
   // ── Save all pending changes ────────────────────────────────
   async function saveAll() {
     setSavingState(true);
-    const updates = skus.map((s) =>
-      supabase
-        .from("skus")
-        .update({ sort_order: s.sort_order, is_promo: s.is_promo, is_active: s.is_active })
-        .eq("id", s.id)
+    const changed = skus.filter((s) => {
+      const saved = savedSkus.find((ss) => ss.id === s.id);
+      return saved && (
+        s.sort_order !== saved.sort_order ||
+        s.is_promo !== saved.is_promo ||
+        s.is_active !== saved.is_active
+      );
+    });
+    if (changed.length === 0) { setSavingState(false); return; }
+    const results = await Promise.all(
+      changed.map((s) =>
+        supabase.from("skus")
+          .update({ sort_order: s.sort_order, is_promo: s.is_promo, is_active: s.is_active })
+          .eq("id", s.id)
+      )
     );
-    const results = await Promise.all(updates);
     const failed = results.filter((r) => r.error);
     if (failed.length) {
       showMessage("error", "Some changes failed to save. Please try again.");
