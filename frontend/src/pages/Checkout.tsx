@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
@@ -6,7 +6,6 @@ import { supabase } from "../lib/supabase";
 import { callEdgeFunction } from "../lib/supabase";
 import type { DeliverySlot, SlotType } from "../types";
 
-// Generate dates for the next 14 days
 function getNextDays(count: number): string[] {
   const dates: string[] = [];
   for (let i = 0; i < count; i++) {
@@ -18,12 +17,19 @@ function getNextDays(count: number): string[] {
 }
 
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-SG", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-SG", {
+    weekday: "short", month: "short", day: "numeric",
   });
+}
+
+interface OneMapResult {
+  BLK_NO: string;
+  ROAD_NAME: string;
+  BUILDING: string;
+  ADDRESS: string;
+  POSTAL: string;
+  LATITUDE: string;
+  LONGITUDE: string;
 }
 
 export default function Checkout() {
@@ -32,48 +38,109 @@ export default function Checkout() {
   const { user, profile } = useAuthStore();
 
   const [slots, setSlots] = useState<DeliverySlot[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<SlotType | "">("");
-  const [address, setAddress] = useState(profile?.address ?? "");
+  const [slotsLoading, setSlotsLoading] = useState(true);
+
+  // Address state
+  const [postalCode, setPostalCode] = useState("");
+  const [unitNo, setUnitNo] = useState("");
+  const [addressLookup, setAddressLookup] = useState<"idle" | "loading" | "found" | "error">("idle");
+  const [addressResult, setAddressResult] = useState<OneMapResult | null>(null);
+  const [addressError, setAddressError] = useState("");
+  const postalDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Contact state
   const [name, setName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [slotsLoading, setSlotsLoading] = useState(true);
 
   const sub = subtotal();
   const dates = getNextDays(14);
 
-  // Fetch open slots
   useEffect(() => {
     async function fetchSlots() {
       setSlotsLoading(true);
       const { data } = await supabase
-        .from("delivery_slots")
-        .select("*")
-        .eq("is_open", true)
+        .from("delivery_slots").select("*").eq("is_open", true)
         .order("delivery_date", { ascending: true })
         .order("slot_type", { ascending: true });
-
       if (data) setSlots(data as DeliverySlot[]);
       setSlotsLoading(false);
     }
     fetchSlots();
   }, []);
 
-  // Redirect if cart is empty
   useEffect(() => {
     if (items.length === 0) navigate("/", { replace: true });
   }, [items, navigate]);
 
-  const getSlotsForDate = (date: string) =>
-    slots.filter((s) => s.delivery_date === date);
+  // Auto-lookup when postal code reaches 6 digits
+  useEffect(() => {
+    if (postalDebounce.current) clearTimeout(postalDebounce.current);
+
+    if (postalCode.length < 6) {
+      setAddressLookup("idle");
+      setAddressResult(null);
+      setAddressError("");
+      return;
+    }
+
+    if (postalCode.length === 6) {
+      postalDebounce.current = setTimeout(() => lookupPostal(postalCode), 400);
+    }
+
+    return () => {
+      if (postalDebounce.current) clearTimeout(postalDebounce.current);
+    };
+  }, [postalCode]);
+
+  async function lookupPostal(code: string) {
+    setAddressLookup("loading");
+    setAddressResult(null);
+    setAddressError("");
+
+    try {
+      const res = await fetch(
+        `https://www.onemap.gov.sg/api/common/elastic/search?searchVal=${code}&returnGeom=Y&getAddrDetails=Y&pageNum=1`
+      );
+      const json = await res.json();
+
+      if (!json.results || json.results.length === 0) {
+        setAddressLookup("error");
+        setAddressError("Postal code not found. Please check and try again.");
+        return;
+      }
+
+      // Pick the result that matches the postal code exactly
+      const match: OneMapResult =
+        json.results.find((r: OneMapResult) => r.POSTAL === code) ?? json.results[0];
+
+      setAddressResult(match);
+      setAddressLookup("found");
+    } catch {
+      setAddressLookup("error");
+      setAddressError("Could not look up address. Please check your connection.");
+    }
+  }
+
+  const getSlotsForDate = (date: string) => slots.filter((s) => s.delivery_date === date);
 
   const getSlotStatus = (slot: DeliverySlot) => {
     if (!slot.is_open) return "closed";
     if (slot.current_orders >= slot.max_orders) return "full";
     return "open";
+  };
+
+  // Compose final address string
+  const buildAddress = () => {
+    if (!addressResult) return "";
+    const building = addressResult.BUILDING !== "NIL" ? ` ${addressResult.BUILDING}` : "";
+    const unit = unitNo.trim() ? ` #${unitNo.trim().replace(/^#/, "")}` : "";
+    return `${addressResult.BLK_NO} ${addressResult.ROAD_NAME}${building}${unit} Singapore ${addressResult.POSTAL}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,8 +152,8 @@ export default function Checkout() {
       return;
     }
 
-    if (!address.trim()) {
-      setError("Please enter your delivery address.");
+    if (addressLookup !== "found" || !addressResult) {
+      setError("Please enter a valid Singapore postal code.");
       return;
     }
 
@@ -97,35 +164,20 @@ export default function Checkout() {
 
     setLoading(true);
 
-    const payload = {
+    const { data, error: fnError } = await callEdgeFunction<{ order_id: string }>("place-order", {
       customer_id: user?.id ?? undefined,
-      guest_info: {
-        name: name.trim(),
-        phone: phone.trim(),
-        email: email.trim(),
-      },
-      delivery_address: address.trim(),
+      guest_info: { name: name.trim(), phone: phone.trim(), email: email.trim() },
+      delivery_address: buildAddress(),
+      lat: parseFloat(addressResult.LATITUDE),
+      lng: parseFloat(addressResult.LONGITUDE),
       delivery_date: selectedDate,
       slot_type: selectedSlot,
-      items: items.map((i) => ({
-        sku_id: i.sku.id,
-        quantity: i.quantity,
-        unit_price: i.sku.price,
-      })),
-    };
-
-    const { data, error: fnError } = await callEdgeFunction<{ order_id: string }>(
-      "place-order",
-      payload
-    );
+      items: items.map((i) => ({ sku_id: i.sku.id, quantity: i.quantity, unit_price: i.sku.price })),
+    });
 
     setLoading(false);
 
-    if (fnError) {
-      setError(fnError);
-      return;
-    }
-
+    if (fnError) { setError(fnError); return; }
     clearCart();
     navigate(`/order/${data!.order_id}`);
   };
@@ -135,12 +187,10 @@ export default function Checkout() {
       <h1 className="font-heading text-3xl font-bold text-primary mb-6">Checkout</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Delivery Slot Selection */}
-        <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-4">
-            Select Delivery Slot
-          </h2>
 
+        {/* Delivery Slot */}
+        <div className="card p-5">
+          <h2 className="font-heading text-xl font-semibold text-primary mb-4">Select Delivery Slot</h2>
           {slotsLoading ? (
             <div className="flex items-center gap-2 text-text-muted">
               <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -148,30 +198,19 @@ export default function Checkout() {
             </div>
           ) : (
             <>
-              {/* Date picker */}
               <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
                 {dates.map((date) => {
                   const dateSlots = getSlotsForDate(date);
-                  const hasOpen = dateSlots.some(
-                    (s) => s.is_open && s.current_orders < s.max_orders
-                  );
+                  const hasOpen = dateSlots.some((s) => s.is_open && s.current_orders < s.max_orders);
                   const isSelected = selectedDate === date;
-
                   return (
-                    <button
-                      key={date}
-                      type="button"
-                      onClick={() => {
-                        setSelectedDate(date);
-                        setSelectedSlot("");
-                      }}
+                    <button key={date} type="button"
+                      onClick={() => { setSelectedDate(date); setSelectedSlot(""); }}
                       disabled={!hasOpen}
                       className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-center transition-all ${
-                        isSelected
-                          ? "bg-primary text-white font-semibold shadow"
-                          : hasOpen
-                          ? "bg-white border border-primary/30 hover:border-primary text-text-muted hover:text-primary"
-                          : "bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
+                        isSelected ? "bg-primary text-white font-semibold shadow"
+                        : hasOpen ? "bg-white border border-primary/30 hover:border-primary text-text-muted hover:text-primary"
+                        : "bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
                       }`}
                     >
                       <span className="block text-xs font-medium">
@@ -185,38 +224,26 @@ export default function Checkout() {
                 })}
               </div>
 
-              {/* Slot selector */}
               {selectedDate && (
                 <div className="grid grid-cols-2 gap-3">
                   {(["morning", "evening"] as SlotType[]).map((slotType) => {
-                    const slot = getSlotsForDate(selectedDate).find(
-                      (s) => s.slot_type === slotType
-                    );
+                    const slot = getSlotsForDate(selectedDate).find((s) => s.slot_type === slotType);
                     const status = slot ? getSlotStatus(slot) : "closed";
                     const isSelected = selectedSlot === slotType;
                     const available = status === "open";
-
                     return (
-                      <button
-                        key={slotType}
-                        type="button"
+                      <button key={slotType} type="button"
                         onClick={() => available && setSelectedSlot(slotType)}
                         disabled={!available}
                         className={`relative p-4 rounded-card border-2 text-left transition-all ${
-                          isSelected
-                            ? "border-primary bg-primary/5"
-                            : available
-                            ? "border-primary/20 hover:border-primary/50 bg-white"
-                            : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
+                          isSelected ? "border-primary bg-primary/5"
+                          : available ? "border-primary/20 hover:border-primary/50 bg-white"
+                          : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xl">
-                            {slotType === "morning" ? "🌅" : "🌇"}
-                          </span>
-                          <span className="font-semibold capitalize text-text-main">
-                            {slotType}
-                          </span>
+                          <span className="text-xl">{slotType === "morning" ? "🌅" : "🌇"}</span>
+                          <span className="font-semibold capitalize text-text-main">{slotType}</span>
                           {isSelected && (
                             <span className="ml-auto w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                               <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -226,115 +253,136 @@ export default function Checkout() {
                           )}
                         </div>
                         <p className="text-xs text-text-muted">
-                          {slotType === "morning" ? "5:00 AM – 9:00 AM" : "4:00 PM – 8:00 PM"}
+                          {slotType === "morning" ? "7:00 AM – 10:00 AM" : "5:00 PM – 8:00 PM"}
                         </p>
                         <p className="text-xs mt-1">
-                          {status === "open" && slot && (
-                            <span className="text-success font-medium">
-                              {slot.max_orders - slot.current_orders} slots left
-                            </span>
-                          )}
-                          {status === "full" && (
-                            <span className="text-error font-medium">Fully booked</span>
-                          )}
-                          {status === "closed" && (
-                            <span className="text-text-muted">Closed</span>
-                          )}
+                          {status === "open" && slot && <span className="text-success font-medium">{slot.max_orders - slot.current_orders} slots left</span>}
+                          {status === "full" && <span className="text-error font-medium">Fully booked</span>}
+                          {status === "closed" && <span className="text-text-muted">Closed</span>}
                         </p>
                       </button>
                     );
                   })}
                 </div>
               )}
-
-              {!selectedDate && (
-                <p className="text-text-muted text-sm mt-2">
-                  Select a date above to see available delivery slots.
-                </p>
-              )}
+              {!selectedDate && <p className="text-text-muted text-sm mt-2">Select a date above to see available slots.</p>}
             </>
           )}
         </div>
 
         {/* Delivery Address */}
         <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-4">
-            Delivery Address
-          </h2>
-          <label className="label" htmlFor="address">
-            Full delivery address
-          </label>
-          <textarea
-            id="address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Block XX, Street Name, #XX-XX, Singapore XXXXXX"
-            rows={3}
-            className="input resize-none"
-            required
-          />
+          <h2 className="font-heading text-xl font-semibold text-primary mb-4">Delivery Address</h2>
+
+          {/* Step 1: Postal code */}
+          <div className="mb-4">
+            <label className="label" htmlFor="postal">
+              Singapore Postal Code
+            </label>
+            <div className="relative">
+              <input
+                id="postal"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="e.g. 560123"
+                className={`input pr-10 font-mono tracking-widest ${
+                  addressLookup === "found" ? "border-success focus:border-success" :
+                  addressLookup === "error" ? "border-error focus:border-error" : ""
+                }`}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {addressLookup === "loading" && (
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                )}
+                {addressLookup === "found" && (
+                  <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                {addressLookup === "error" && (
+                  <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+            </div>
+            {addressError && <p className="text-error text-xs mt-1">{addressError}</p>}
+          </div>
+
+          {/* Step 2: Auto-filled address */}
+          {addressLookup === "found" && addressResult && (
+            <div className="mb-4 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
+              <p className="text-xs text-text-muted font-medium uppercase tracking-wide mb-1">Address found</p>
+              <p className="text-text-main font-medium">
+                {addressResult.BLK_NO} {addressResult.ROAD_NAME}
+                {addressResult.BUILDING !== "NIL" && (
+                  <span className="text-text-muted"> · {addressResult.BUILDING}</span>
+                )}
+              </p>
+              <p className="text-text-muted text-sm">Singapore {addressResult.POSTAL}</p>
+            </div>
+          )}
+
+          {/* Step 3: Unit number */}
+          {addressLookup === "found" && (
+            <div>
+              <label className="label" htmlFor="unit">
+                Unit Number <span className="text-text-muted font-normal">(optional)</span>
+              </label>
+              <input
+                id="unit"
+                type="text"
+                value={unitNo}
+                onChange={(e) => setUnitNo(e.target.value)}
+                placeholder="#05-10"
+                className="input"
+              />
+              {/* Preview */}
+              {buildAddress() && (
+                <p className="text-text-muted text-xs mt-2">
+                  <span className="font-medium text-text-main">Full address: </span>
+                  {buildAddress()}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Contact Details */}
         <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-4">
-            Contact Details
-          </h2>
+          <h2 className="font-heading text-xl font-semibold text-primary mb-4">Contact Details</h2>
           <div className="space-y-4">
             <div>
               <label className="label" htmlFor="name">Full name</label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your full name"
-                className="input"
-                required
-              />
+              <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)}
+                placeholder="Your full name" className="input" required />
             </div>
             <div>
               <label className="label" htmlFor="phone">Phone number</label>
-              <input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+65 9XXX XXXX"
-                className="input"
-                required
-              />
+              <input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                placeholder="+65 9XXX XXXX" className="input" required />
             </div>
             <div>
               <label className="label" htmlFor="email">Email address</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="juan@example.com"
-                className="input"
-                required
-              />
+              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com" className="input" required />
             </div>
           </div>
         </div>
 
         {/* Order Summary */}
         <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-4">
-            Order Summary
-          </h2>
+          <h2 className="font-heading text-xl font-semibold text-primary mb-4">Order Summary</h2>
           <div className="space-y-2">
             {items.map((item) => (
               <div key={item.sku.id} className="flex justify-between text-sm">
                 <span className="text-text-muted">
-                  {item.sku.name}{" "}
-                  <span className="font-medium text-text-main">×{item.quantity}</span>
+                  {item.sku.name} <span className="font-medium text-text-main">×{item.quantity}</span>
                 </span>
-                <span className="font-medium">
-                  S${(item.sku.price * item.quantity).toFixed(2)}
-                </span>
+                <span className="font-medium">S${(item.sku.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
             <div className="border-t border-primary/10 pt-2 mt-2 flex justify-between">
@@ -342,7 +390,6 @@ export default function Checkout() {
               <span className="font-bold text-xl text-primary">S${sub.toFixed(2)}</span>
             </div>
           </div>
-
           {selectedDate && selectedSlot && (
             <div className="mt-3 pt-3 border-t border-primary/10 text-sm text-text-muted">
               <span className="font-medium text-text-main">Delivery: </span>
@@ -351,27 +398,19 @@ export default function Checkout() {
           )}
         </div>
 
-        {/* Error */}
         {error && (
           <div className="bg-error/10 border border-error/30 text-error rounded-lg px-4 py-3 text-sm">
             {error}
           </div>
         )}
 
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full btn-primary py-4 text-base"
-        >
+        <button type="submit" disabled={loading} className="w-full btn-primary py-4 text-base">
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               Placing Order...
             </span>
-          ) : (
-            "Place Order (Cash on Delivery)"
-          )}
+          ) : "Place Order (Cash on Delivery)"}
         </button>
 
         <p className="text-center text-xs text-text-muted">
