@@ -110,20 +110,20 @@ export interface CartItem {
   quantity: number;
 }
 
-// Simplified 5-status workflow:
-// pending (awaiting PayNow proof) → confirmed (payment verified) →
-// preparing (in production) → delivered — or → cancelled at any point
+const ALL_STATUSES: OrderStatus[] = ["pending", "confirmed", "preparing", "delivered", "cancelled"];
+
+// Admin can move any order to any status freely
 export const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pending:    ["confirmed", "cancelled"],
-  confirmed:  ["preparing", "cancelled"],
-  preparing:  ["delivered", "cancelled"],
-  delivered:  [],
-  cancelled:  [],
+  pending:    ALL_STATUSES.filter((s) => s !== "pending"),
+  confirmed:  ALL_STATUSES.filter((s) => s !== "confirmed"),
+  preparing:  ALL_STATUSES.filter((s) => s !== "preparing"),
+  delivered:  ALL_STATUSES.filter((s) => s !== "delivered"),
+  cancelled:  ALL_STATUSES.filter((s) => s !== "cancelled"),
 };
 
-// Human-readable action labels for admin dropdown
 export const STATUS_ACTION_LABELS: Record<string, string> = {
-  confirmed:  "✓ Verify Payment",
+  pending:    "Mark Pending",
+  confirmed:  "Confirm Payment",
   preparing:  "Start Preparing",
   delivered:  "Mark Delivered",
   cancelled:  "Cancel Order",

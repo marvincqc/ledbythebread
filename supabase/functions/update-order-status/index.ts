@@ -3,21 +3,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
 
-// Valid status transitions
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  pending:   ["confirmed", "cancelled"],
-  confirmed: ["preparing", "cancelled"],
-  preparing: ["delivered", "cancelled"],
-  delivered: [],
-  cancelled: [],
-};
-
-// Statuses where cancellation should decrement slot count
-const DECREMENT_ON_CANCEL = new Set(["pending", "confirmed"]);
+const VALID_STATUSES = new Set(["pending", "confirmed", "preparing", "delivered", "cancelled"]);
+const DECREMENT_ON_CANCEL = new Set(["pending", "confirmed", "preparing"]);
 
 interface UpdateStatusPayload {
   order_id: string;
@@ -69,7 +61,10 @@ serve(async (req: Request) => {
       return errorResponse("order_id and new_status are required", 400);
     }
 
-    // Fetch the current order
+    if (!VALID_STATUSES.has(payload.new_status)) {
+      return errorResponse(`Invalid status: ${payload.new_status}`, 400);
+    }
+
     const { data: order, error: fetchError } = await supabase
       .from("orders")
       .select("*")
@@ -83,15 +78,6 @@ serve(async (req: Request) => {
     const currentStatus = order.status as string;
     const newStatus = payload.new_status;
 
-    // Validate transition
-    const allowedNext = VALID_TRANSITIONS[currentStatus] ?? [];
-    if (!allowedNext.includes(newStatus)) {
-      return errorResponse(
-        `Invalid transition from '${currentStatus}' to '${newStatus}'. Allowed: [${allowedNext.join(", ")}]`,
-        400
-      );
-    }
-
     // Update order status
     const { error: updateError } = await supabase
       .from("orders")
@@ -103,7 +89,7 @@ serve(async (req: Request) => {
     }
 
     // If transitioning to cancelled and slot should be decremented
-    if (newStatus === "cancelled" && DECREMENT_ON_CANCEL.has(currentStatus)) {
+    if (newStatus === "cancelled" && currentStatus !== "cancelled" && DECREMENT_ON_CANCEL.has(currentStatus)) {
       const { error: decrementError } = await supabase.rpc(
         "decrement_slot_orders",
         {
