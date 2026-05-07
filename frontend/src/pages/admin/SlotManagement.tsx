@@ -89,26 +89,55 @@ export default function SlotManagement() {
   async function loadAndGenerate(weeks: number) {
     const dates = getDateRange(weeks);
 
-    // Fetch existing slots
-    const { data } = await supabase
-      .from("delivery_slots").select("*")
-      .in("delivery_date", dates)
-      .order("delivery_date").order("slot_type");
-    const existing = (data ?? []) as DeliverySlot[];
-    setSlots(existing);
+    // Fetch existing slots + real order counts in parallel
+    const [slotsRes, ordersRes] = await Promise.all([
+      supabase.from("delivery_slots").select("*")
+        .in("delivery_date", dates)
+        .order("delivery_date").order("slot_type"),
+      supabase.from("orders").select("delivery_date, slot_type")
+        .in("delivery_date", dates)
+        .not("status", "in", "(cancelled,delivered)"),
+    ]);
 
-    // Auto-generate missing slots silently
+    const existing = (slotsRes.data ?? []) as DeliverySlot[];
+
+    // Calculate real current_orders from actual active orders
+    const orderCounts: Record<string, number> = {};
+    for (const o of ordersRes.data ?? []) {
+      const key = `${o.delivery_date}|${o.slot_type}`;
+      orderCounts[key] = (orderCounts[key] ?? 0) + 1;
+    }
+
+    // Sync current_orders in DB if stale, update local state with real counts
+    const syncUpdates: Promise<unknown>[] = [];
+    const synced = existing.map((slot) => {
+      const key = `${slot.delivery_date}|${slot.slot_type}`;
+      const realCount = orderCounts[key] ?? 0;
+      if (realCount !== slot.current_orders) {
+        syncUpdates.push(
+          supabase.from("delivery_slots")
+            .update({ current_orders: realCount })
+            .eq("id", slot.id)
+        );
+        return { ...slot, current_orders: realCount };
+      }
+      return slot;
+    });
+    if (syncUpdates.length > 0) await Promise.all(syncUpdates);
+    setSlots(synced);
+
+    // Auto-generate missing slots silently (weekdays open, weekends closed, default 10)
     const toInsert: { delivery_date: string; slot_type: SlotType; max_orders: number; is_open: boolean; current_orders: number }[] = [];
     for (const date of dates) {
       for (const slotType of ["morning", "evening"] as SlotType[]) {
-        const exists = existing.some((s) => s.delivery_date === date && s.slot_type === slotType);
+        const exists = synced.some((s) => s.delivery_date === date && s.slot_type === slotType);
         if (!exists) {
           toInsert.push({
             delivery_date: date,
             slot_type: slotType,
             max_orders: DEFAULT_MAX,
-            is_open: !isWeekend(date), // weekends closed by default
-            current_orders: 0,
+            is_open: !isWeekend(date),
+            current_orders: orderCounts[`${date}|${slotType}`] ?? 0,
           });
         }
       }
