@@ -5,10 +5,16 @@ import { supabase } from "../lib/supabase";
 import type { ReactNode } from "react";
 
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAdmin, isLoading, fetchProfile, setUser } = useAuthStore();
-  const [settling, setSettling] = useState(true);
+  const { isAdmin, isLoading, fetchProfile, setUser, user } = useAuthStore();
+  const [settling, setSettling] = useState(!user); // skip if already authenticated
 
   useEffect(() => {
+    // Already have a user in store — no need to re-check
+    if (user) {
+      setSettling(false);
+      return;
+    }
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
@@ -16,7 +22,7 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
       }
       setSettling(false);
     });
-  }, [fetchProfile, setUser]);
+  }, [fetchProfile, setUser, user]);
 
   if (isLoading || settling) {
     return (

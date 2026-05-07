@@ -18,13 +18,10 @@ export default function AuthCallback() {
       setUser(session.user);
       await fetchProfile(session.user.id);
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", session.user.id)
-        .single();
+      // Read role directly from store after fetchProfile completes
+      const { isAdmin } = useAuthStore.getState();
 
-      if (profile?.role === "admin") {
+      if (isAdmin) {
         navigate("/admin", { replace: true });
       } else {
         const returnTo = sessionStorage.getItem("auth_return_to") || "/";
