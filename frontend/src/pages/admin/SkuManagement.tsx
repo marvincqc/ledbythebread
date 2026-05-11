@@ -67,45 +67,39 @@ export default function SkuManagement() {
 
   async function fetchData() {
     if (!pageCache.get('admin-skus')) setLoading(true);
-    const { data } = await supabase
-      .from("skus")
-      .select("*")
-      .order("sort_order", { ascending: true });
-    if (data) {
-      setSkus(data as Sku[]);
-      setSavedSkus(data as Sku[]);
-      pageCache.set('admin-skus', data);
+    try {
+      const { data } = await supabase.from("skus").select("*").order("sort_order", { ascending: true });
+      if (data) {
+        setSkus(data as Sku[]);
+        setSavedSkus(data as Sku[]);
+        pageCache.set('admin-skus', data);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   // ── Save all pending changes ────────────────────────────────
   async function saveAll() {
-    setSavingState(true);
     const changed = skus.filter((s) => {
       const saved = savedSkus.find((ss) => ss.id === s.id);
-      return saved && (
-        s.sort_order !== saved.sort_order ||
-        s.is_promo !== saved.is_promo ||
-        s.is_active !== saved.is_active
-      );
+      return saved && (s.sort_order !== saved.sort_order || s.is_promo !== saved.is_promo || s.is_active !== saved.is_active);
     });
-    if (changed.length === 0) { setSavingState(false); return; }
-    const results = await Promise.all(
-      changed.map((s) =>
-        supabase.from("skus")
-          .update({ sort_order: s.sort_order, is_promo: s.is_promo, is_active: s.is_active })
-          .eq("id", s.id)
-      )
-    );
-    const failed = results.filter((r) => r.error);
-    if (failed.length) {
-      showMessage("error", "Some changes failed to save. Please try again.");
-    } else {
-      setSavedSkus([...skus]);
-      showMessage("success", "All changes saved.");
+    if (changed.length === 0) return;
+    setSavingState(true);
+    try {
+      const results = await Promise.all(
+        changed.map((s) => supabase.from("skus").update({ sort_order: s.sort_order, is_promo: s.is_promo, is_active: s.is_active }).eq("id", s.id))
+      );
+      if (results.some((r) => r.error)) {
+        showMessage("error", "Some changes failed to save. Please try again.");
+      } else {
+        setSavedSkus([...skus]);
+        showMessage("success", "All changes saved.");
+      }
+    } finally {
+      setSavingState(false);
     }
-    setSavingState(false);
   }
 
   function discardAll() {
@@ -206,6 +200,7 @@ export default function SkuManagement() {
       return;
     }
     setModalSaving(true);
+    try {
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
@@ -234,7 +229,9 @@ export default function SkuManagement() {
         fetchData();
       }
     }
-    setModalSaving(false);
+    } finally {
+      setModalSaving(false);
+    }
   }
 
   function showMessage(type: "success" | "error", text: string) {

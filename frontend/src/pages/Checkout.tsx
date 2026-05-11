@@ -212,27 +212,27 @@ export default function Checkout() {
     }
 
     setLoading(true);
-
-    const { data, error: fnError } = await callEdgeFunction<{ order_id: string }>("place-order", {
-      customer_id: user?.id ?? undefined,
-      guest_info: { name: name.trim(), phone: phone.trim(), email: email.trim() },
-      delivery_address: buildAddress(),
-      lat: parseFloat(addressResult.LATITUDE),
-      lng: parseFloat(addressResult.LONGITUDE),
-      delivery_date: selectedDate,
-      slot_type: selectedSlot,
-      items: items.map((i) => ({ sku_id: i.sku.id, quantity: i.quantity, unit_price: i.sku.price })),
-      metadata: { payment_proof_url: proofUrl },
-    });
-
-    setLoading(false);
-
-    if (fnError || !data?.order_id) {
-      setError(fnError ?? "Failed to place order. Please try again.");
-      return;
+    try {
+      const { data, error: fnError } = await callEdgeFunction<{ order_id: string }>("place-order", {
+        customer_id: user?.id ?? undefined,
+        guest_info: { name: name.trim(), phone: phone.trim(), email: email.trim() },
+        delivery_address: buildAddress(),
+        lat: parseFloat(addressResult.LATITUDE),
+        lng: parseFloat(addressResult.LONGITUDE),
+        delivery_date: selectedDate,
+        slot_type: selectedSlot,
+        items: items.map((i) => ({ sku_id: i.sku.id, quantity: i.quantity, unit_price: i.sku.price })),
+        metadata: { payment_proof_url: proofUrl },
+      });
+      if (fnError || !data?.order_id) {
+        setError(fnError ?? "Failed to place order. Please try again.");
+        return;
+      }
+      clearCart();
+      navigate(`/order/${data.order_id}`);
+    } finally {
+      setLoading(false);
     }
-    clearCart();
-    navigate(`/order/${data.order_id}`);
   };
 
   return (

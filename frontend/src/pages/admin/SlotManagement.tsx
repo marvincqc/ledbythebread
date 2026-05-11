@@ -165,10 +165,12 @@ export default function SlotManagement() {
     if (newWeeks < 1 || newWeeks > 12) return;
     setWeeksAhead(newWeeks);
     setSavingWeeks(true);
-    await supabase.from("admin_settings")
-      .upsert({ key: "max_weeks_out", value: String(newWeeks) }, { onConflict: "key" });
-    await loadAndGenerate(newWeeks);
-    setSavingWeeks(false);
+    try {
+      await supabase.from("admin_settings").upsert({ key: "max_weeks_out", value: String(newWeeks) }, { onConflict: "key" });
+      await loadAndGenerate(newWeeks);
+    } finally {
+      setSavingWeeks(false);
+    }
   }
 
   function toggleSlot(slot: DeliverySlot) {

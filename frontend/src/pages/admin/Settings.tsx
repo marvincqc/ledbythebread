@@ -30,10 +30,7 @@ export default function AdminSettings() {
   async function fetchSettings() {
     if (!pageCache.get('admin-settings')) setLoading(true);
     try {
-      const { data } = await supabase
-        .from("admin_settings")
-        .select("*")
-        .in("key", Object.keys(CORE_SETTINGS));
+      const { data } = await supabase.from("admin_settings").select("*").in("key", Object.keys(CORE_SETTINGS));
       if (data) {
         const freshSettings = data as AdminSetting[];
         const vals: Record<string, string> = {};
@@ -51,16 +48,17 @@ export default function AdminSettings() {
     const value = editValues[key];
     if (value === undefined) return;
     setSaving((p) => ({ ...p, [key]: true }));
-    const { error } = await supabase
-      .from("admin_settings")
-      .upsert({ key, value }, { onConflict: "key" });
-    if (error) {
-      showMessage("error", error.message);
-    } else {
-      setSettings((prev) => prev.map((s) => s.key === key ? { ...s, value } : s));
-      showMessage("success", `"${CORE_SETTINGS[key]?.label}" saved.`);
+    try {
+      const { error } = await supabase.from("admin_settings").upsert({ key, value }, { onConflict: "key" });
+      if (error) {
+        showMessage("error", error.message);
+      } else {
+        setSettings((prev) => prev.map((s) => s.key === key ? { ...s, value } : s));
+        showMessage("success", `"${CORE_SETTINGS[key]?.label}" saved.`);
+      }
+    } finally {
+      setSaving((p) => ({ ...p, [key]: false }));
     }
-    setSaving((p) => ({ ...p, [key]: false }));
   }
 
   function showMessage(type: "success" | "error", text: string) {

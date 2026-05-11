@@ -42,29 +42,21 @@ export default function OrderConfirmation() {
   useEffect(() => {
     async function fetchOrder() {
       if (!id) return;
-
       setLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from("orders")
-        .select(
-          `
-          *,
-          order_items (
-            *,
-            sku:skus (*)
-          )
-        `
-        )
-        .eq("id", id)
-        .single();
-
-      if (fetchError || !data) {
-        setError("Order not found. Please check your order ID.");
-      } else {
-        setOrder(data as unknown as Order);
+      try {
+        const { data, error: fetchError } = await supabase
+          .from("orders")
+          .select("*, order_items(*, sku:skus(*))")
+          .eq("id", id)
+          .single();
+        if (fetchError || !data) {
+          setError("Order not found. Please check your order ID.");
+        } else {
+          setOrder(data as unknown as Order);
+        }
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
     fetchOrder();

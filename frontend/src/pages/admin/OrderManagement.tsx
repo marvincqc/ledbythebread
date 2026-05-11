@@ -57,41 +57,34 @@ export default function OrderManagement() {
   useEffect(() => { fetchOrders(); }, [filters.dateFrom, filters.dateTo, filters.slot, filters.status]);
 
   async function fetchOrders() {
-    const hasCached = !!pageCache.get('admin-orders');
-    if (!hasCached) setLoading(true);
-
-    let query = supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (filters.dateFrom) query = query.gte("delivery_date", filters.dateFrom);
-    if (filters.dateTo) query = query.lte("delivery_date", filters.dateTo);
-    if (filters.slot) query = query.eq("slot_type", filters.slot as SlotType);
-    if (filters.status) query = query.eq("status", filters.status);
-
-    const { data } = await query;
-    if (data) {
-      setOrders(data as Order[]);
-      pageCache.set('admin-orders', data);
+    if (!pageCache.get('admin-orders')) setLoading(true);
+    try {
+      let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
+      if (filters.dateFrom) query = query.gte("delivery_date", filters.dateFrom);
+      if (filters.dateTo) query = query.lte("delivery_date", filters.dateTo);
+      if (filters.slot) query = query.eq("slot_type", filters.slot as SlotType);
+      if (filters.status) query = query.eq("status", filters.status);
+      const { data } = await query;
+      if (data) { setOrders(data as Order[]); pageCache.set('admin-orders', data); }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function selectOrder(order: Order) {
     setSelectedOrder(order);
     if (order.order_items) return;
     setLoadingDetail(true);
-    const { data } = await supabase
-      .from("order_items")
-      .select("*, sku:skus(*)")
-      .eq("order_id", order.id);
-    if (data) {
-      const withItems = { ...order, order_items: data };
-      setSelectedOrder(withItems);
-      setOrders((prev) => prev.map((o) => o.id === order.id ? withItems : o));
+    try {
+      const { data } = await supabase.from("order_items").select("*, sku:skus(*)").eq("order_id", order.id);
+      if (data) {
+        const withItems = { ...order, order_items: data };
+        setSelectedOrder(withItems);
+        setOrders((prev) => prev.map((o) => o.id === order.id ? withItems : o));
+      }
+    } finally {
+      setLoadingDetail(false);
     }
-    setLoadingDetail(false);
   }
 
   const filteredOrders = orders.filter((o) => {

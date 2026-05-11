@@ -38,8 +38,6 @@ export default function Home() {
     load();
   }, []);
 
-  const filtered = skus;
-
   const handleAdd = (sku: Sku) => {
     addItem(sku);
     setAddedIds((prev) => new Set(prev).add(sku.id));
@@ -110,14 +108,14 @@ export default function Home() {
             </div>
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : skus.length === 0 ? (
         <div className="text-center py-16 text-text-muted">
           <span className="text-5xl block mb-4">🍞</span>
           <p className="font-medium">No products found</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((sku) => (
+          {skus.map((sku) => (
             <SkuCard
               key={sku.id}
               sku={sku}
