@@ -4,10 +4,11 @@ import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
 import { supabase } from "../lib/supabase";
 import type { Sku } from "../types";
+import { pageCache } from "../lib/pageCache";
 
 export default function Home() {
-  const [skus, setSkus] = useState<Sku[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [skus, setSkus] = useState<Sku[]>(() => pageCache.get<Sku[]>('home-skus') ?? []);
+  const [loading, setLoading] = useState(!pageCache.get('home-skus'));
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
   const { addItem, openCart } = useCartStore();
@@ -15,15 +16,23 @@ export default function Home() {
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
-      const { data } = await supabase
-        .from("skus")
-        .select("*")
-        .eq("is_active", true)
-        .order("is_promo", { ascending: false })
-        .order("sort_order", { ascending: true });
-      if (data) setSkus(data as Sku[]);
-      setLoading(false);
+      if (!pageCache.get('home-skus')) setLoading(true);
+      try {
+        const { data } = await supabase
+          .from("skus")
+          .select("*")
+          .eq("is_active", true)
+          .order("is_promo", { ascending: false })
+          .order("sort_order", { ascending: true });
+        if (data) {
+          setSkus(data as Sku[]);
+          pageCache.set('home-skus', data);
+        }
+      } catch (e) {
+        console.error("Failed to load products:", e);
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();
