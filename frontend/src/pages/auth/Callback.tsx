@@ -1,10 +1,12 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
 import type { Session } from "@supabase/supabase-js";
 
 export default function AuthCallback() {
   const { setUser, fetchProfile } = useAuthStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const next = localStorage.getItem("auth_redirect") || "/admin";
@@ -17,22 +19,22 @@ export default function AuthCallback() {
       done = true;
       setUser(session.user);
       await fetchProfile(session.user.id);
-      window.location.replace(next);
+      navigate(next, { replace: true });
     }
 
-    // Check immediately — with PKCE the code exchange may already be done
+    // Check immediately — PKCE exchange may already be complete
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) proceed(session);
     });
 
-    // Also listen in case exchange hasn't fired yet
+    // Listen in case exchange hasn't fired yet
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) proceed(session);
     });
 
-    // Give up after 8s and send back to login
+    // Give up after 8s
     const timer = setTimeout(() => {
-      if (!done) window.location.replace("/admin/login");
+      if (!done) navigate("/admin/login", { replace: true });
     }, 8000);
 
     return () => {
