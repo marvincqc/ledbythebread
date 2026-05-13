@@ -24,19 +24,29 @@ export default function AdminLogin() {
     setError(null);
     setLoading(true);
 
-    localStorage.setItem("auth_redirect", "/admin");
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    // If the browser hasn't navigated away within 10s, something went wrong
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError("Redirect timed out. Please try again.");
+    }, 10000);
 
-    if (oauthError) {
-      setError(oauthError.message);
+    try {
+      localStorage.setItem("auth_redirect", "/admin");
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (oauthError) {
+        clearTimeout(timeout);
+        setError(oauthError.message);
+        setLoading(false);
+      }
+      // On success: browser is already navigating to Google, timeout is abandoned
+    } catch (e) {
+      clearTimeout(timeout);
+      setError("Could not connect. Please check your connection and try again.");
       setLoading(false);
     }
-    // On success the browser is redirected to Google — no further action here
   };
 
   return (
