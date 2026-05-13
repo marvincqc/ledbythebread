@@ -29,22 +29,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ profile, isAdmin: profile?.role === "admin" }),
 
   fetchProfile: async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-
-    if (error) {
-      console.error("Error fetching profile:", error);
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single();
+      if (error) {
+        set({ profile: null, isAdmin: false });
+        return;
+      }
+      set({ profile: data as Profile, isAdmin: data?.role === "admin" });
+    } catch {
       set({ profile: null, isAdmin: false });
-      return;
     }
-
-    set({
-      profile: data as Profile,
-      isAdmin: data?.role === "admin",
-    });
   },
 
   signOut: async () => {
@@ -54,20 +48,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     set({ isLoading: true });
-
-    // Get current session
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (session?.user) {
-      set({ user: session.user });
-      await get().fetchProfile(session.user.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        set({ user: session.user });
+        await get().fetchProfile(session.user.id);
+      }
+    } finally {
+      set({ isLoading: false });
     }
 
-    set({ isLoading: false });
-
-    // Listen to auth state changes
     supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
         set({ user: session.user });
