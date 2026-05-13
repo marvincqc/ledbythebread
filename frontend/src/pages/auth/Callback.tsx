@@ -1,44 +1,45 @@
 import { useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
+import type { Session } from "@supabase/supabase-js";
 
 export default function AuthCallback() {
   const { setUser, fetchProfile } = useAuthStore();
 
   useEffect(() => {
-    const next = localStorage.getItem("auth_redirect") || "/";
+    const next = localStorage.getItem("auth_redirect") || "/admin";
     localStorage.removeItem("auth_redirect");
 
     let done = false;
 
-    // Primary: onAuthStateChange fires reliably right after OAuth redirect
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (done || !session) return;
+    async function proceed(session: Session) {
+      if (done) return;
       done = true;
       setUser(session.user);
       await fetchProfile(session.user.id);
       window.location.replace(next);
+    }
+
+    // Check immediately — with PKCE the code exchange may already be done
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) proceed(session);
     });
 
-    // Fallback: if onAuthStateChange doesn't fire within 5s
-    const timer = setTimeout(async () => {
-      if (done) return;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        done = true;
-        setUser(session.user);
-        await fetchProfile(session.user.id);
-        window.location.replace(next);
-      } else {
-        window.location.replace("/admin/login");
-      }
-    }, 5000);
+    // Also listen in case exchange hasn't fired yet
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) proceed(session);
+    });
+
+    // Give up after 8s and send back to login
+    const timer = setTimeout(() => {
+      if (!done) window.location.replace("/admin/login");
+    }, 8000);
 
     return () => {
       subscription.unsubscribe();
       clearTimeout(timer);
     };
-  }, [setUser, fetchProfile]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
