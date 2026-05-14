@@ -533,7 +533,7 @@ export default function Checkout() {
                   type="text"
                   value={unitNo}
                   onChange={(e) => setUnitNo(e.target.value)}
-                  placeholder="#05-10"
+                  placeholder="e.g. #05-10"
                   className="input"
                   required
                 />
