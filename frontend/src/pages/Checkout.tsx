@@ -109,7 +109,7 @@ export default function Checkout() {
     const filename = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
     const { error: uploadError } = await supabase.storage
       .from("payment-proofs")
-      .upload(filename, file, { upsert: true });
+      .upload(filename, file);
 
     if (uploadError) {
       setError("Failed to upload payment proof: " + uploadError.message);
