@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
+import { withTimeout } from "../../lib/withTimeout";
 import type { Session } from "@supabase/supabase-js";
 
 export default function AuthCallback() {
@@ -29,37 +30,42 @@ export default function AuthCallback() {
       const errorParam = params.get("error");
       const errorDesc = params.get("error_description");
 
-      // OAuth provider returned an error
       if (errorParam) {
         setErrorMsg(errorDesc ?? errorParam);
         setTimeout(() => navigate("/admin/login", { replace: true }), 3000);
         return;
       }
 
-      // PKCE: exchange the code for a session explicitly
       if (code) {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(
-          window.location.href
-        );
-        if (error) {
-          setErrorMsg(error.message);
-          setTimeout(() => navigate("/admin/login", { replace: true }), 3000);
-          return;
-        }
-        if (data.session) {
-          await proceed(data.session);
+        try {
+          const { data, error } = await withTimeout(
+            supabase.auth.exchangeCodeForSession(window.location.href),
+            10000
+          );
+          if (error) {
+            setErrorMsg(error.message);
+            setTimeout(() => navigate("/admin/login", { replace: true }), 3000);
+            return;
+          }
+          if (data.session) {
+            await proceed(data.session);
+            return;
+          }
+        } catch {
+          // timeout — fall through to login
+          navigate("/admin/login", { replace: true });
           return;
         }
       }
 
-      // No code — check if already has a session (e.g. page refresh)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await proceed(session);
-        return;
+      // No code — check for existing session (page refresh)
+      try {
+        const { data: { session } } = await withTimeout(supabase.auth.getSession(), 5000);
+        if (session) { await proceed(session); return; }
+      } catch {
+        // ignore
       }
 
-      // Nothing worked
       navigate("/admin/login", { replace: true });
     }
 

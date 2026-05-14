@@ -30,7 +30,6 @@ function formatDay(dateStr: string) {
   return {
     weekday: d.toLocaleDateString("en-SG", { weekday: "short" }),
     date: d.toLocaleDateString("en-SG", { month: "short", day: "numeric" }),
-    full: d.toLocaleDateString("en-SG", { weekday: "long", month: "short", day: "numeric" }),
   };
 }
 
