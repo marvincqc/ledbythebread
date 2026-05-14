@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { supabase, callEdgeFunction } from "../../lib/supabase";
-import type { Order, OrderStatus, SlotType } from "../../types";
+import type { Order, OrderStatus, SlotType, OrderMessage } from "../../types";
 import { STATUS_COLORS, STATUS_ACTION_LABELS } from "../../types";
 import { pageCache } from "../../lib/pageCache";
 
@@ -46,7 +46,67 @@ export default function OrderManagement() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Messages
+  const [messages, setMessages] = useState<OrderMessage[]>([]);
+  const [newMsg, setNewMsg] = useState("");
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const msgChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const closeLightbox = useCallback(() => setLightboxUrl(null), []);
+
+  // Fetch messages + subscribe when selected order changes
+  useEffect(() => {
+    setMessages([]);
+    setNewMsg("");
+    if (msgChannelRef.current) {
+      supabase.removeChannel(msgChannelRef.current);
+      msgChannelRef.current = null;
+    }
+    if (!selectedOrder) return;
+
+    supabase.from("order_messages").select("*").eq("order_id", selectedOrder.id).order("created_at")
+      .then(({ data }) => setMessages((data ?? []) as OrderMessage[]));
+
+    // Mark all unread customer messages as read
+    supabase.from("order_messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("order_id", selectedOrder.id).eq("sender", "customer").is("read_at", null)
+      .then(() => {});
+
+    msgChannelRef.current = supabase
+      .channel(`admin-msg-${selectedOrder.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_messages", filter: `order_id=eq.${selectedOrder.id}` },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new as OrderMessage]);
+          if ((payload.new as OrderMessage).sender === "customer") {
+            supabase.from("order_messages").update({ read_at: new Date().toISOString() }).eq("id", payload.new.id).then(() => {});
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (msgChannelRef.current) {
+        supabase.removeChannel(msgChannelRef.current);
+        msgChannelRef.current = null;
+      }
+    };
+  }, [selectedOrder?.id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function sendAdminMessage() {
+    if (!newMsg.trim() || !selectedOrder) return;
+    setSendingMsg(true);
+    await supabase.from("order_messages").insert({ order_id: selectedOrder.id, sender: "admin", body: newMsg.trim() });
+    setNewMsg("");
+    setSendingMsg(false);
+  }
+
+  const unreadMessageCount = messages.filter((m) => m.sender === "customer" && !m.read_at).length;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") closeLightbox(); };
@@ -255,11 +315,17 @@ export default function OrderManagement() {
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-mono text-xs font-bold text-text-muted">{formatOrderId(selectedOrder.created_at)}</span>
-                  <button onClick={() => setSelectedOrder(null)} className="text-text-muted hover:text-primary">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a href={`/order/${selectedOrder.id}`} target="_blank" rel="noopener noreferrer"
+                      className="text-primary hover:text-primary-dark text-xs font-medium transition-colors">
+                      Track →
+                    </a>
+                    <button onClick={() => setSelectedOrder(null)} className="text-text-muted hover:text-primary">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between">
@@ -301,8 +367,6 @@ export default function OrderManagement() {
                       className={`w-full text-left text-xs px-3 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
                         s === "cancelled"
                           ? "bg-red-50 hover:bg-red-100 text-red-700"
-                          : s === selectedOrder.status
-                          ? "bg-primary/10 text-primary"
                           : "bg-gray-50 hover:bg-primary/10 text-text-main hover:text-primary"
                       }`}
                     >
@@ -333,6 +397,56 @@ export default function OrderManagement() {
                   </button>
                 </div>
               )}
+
+              {/* Messages */}
+              <div className="card p-4">
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">
+                  Messages
+                  {unreadMessageCount > 0 && (
+                    <span className="ml-2 bg-indigo-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                      {unreadMessageCount} new
+                    </span>
+                  )}
+                </p>
+                <div className="space-y-2 max-h-48 overflow-y-auto mb-3 text-xs">
+                  {messages.length === 0 ? (
+                    <p className="text-text-muted text-center py-2">No messages yet.</p>
+                  ) : (
+                    messages.map((msg) => (
+                      <div key={msg.id} className={`rounded-lg px-3 py-2 ${
+                        msg.sender === "admin"
+                          ? "bg-primary/10 text-primary ml-4"
+                          : "bg-background border border-primary/10 text-text-main mr-4"
+                      }`}>
+                        <p className="font-semibold mb-0.5">{msg.sender === "admin" ? "You" : "Customer"}</p>
+                        <p className="leading-relaxed">{msg.body}</p>
+                        <p className="text-text-muted mt-1">
+                          {new Date(msg.created_at).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newMsg}
+                    onChange={(e) => setNewMsg(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminMessage(); } }}
+                    placeholder="Reply to customer…"
+                    className="input text-xs py-1.5 flex-1"
+                    disabled={sendingMsg}
+                  />
+                  <button
+                    onClick={sendAdminMessage}
+                    disabled={sendingMsg || !newMsg.trim()}
+                    className="btn-primary px-3 py-1.5 text-xs flex-shrink-0 disabled:opacity-50"
+                  >
+                    {sendingMsg ? "…" : "Send"}
+                  </button>
+                </div>
+              </div>
 
               {/* Items */}
               <div className="card p-4">

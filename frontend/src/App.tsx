@@ -5,7 +5,6 @@ import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const Home             = lazy(() => import("./pages/Home"));
-const Cart             = lazy(() => import("./pages/Cart"));
 const Checkout         = lazy(() => import("./pages/Checkout"));
 const OrderConfirmation= lazy(() => import("./pages/OrderConfirmation"));
 const AuthCallback     = lazy(() => import("./pages/auth/Callback"));
@@ -15,6 +14,7 @@ const SlotManagement   = lazy(() => import("./pages/admin/SlotManagement"));
 const SkuManagement    = lazy(() => import("./pages/admin/SkuManagement"));
 const OrderManagement  = lazy(() => import("./pages/admin/OrderManagement"));
 const AdminSettings    = lazy(() => import("./pages/admin/Settings"));
+const AdminWaitlist    = lazy(() => import("./pages/admin/Waitlist"));
 
 const PageSpinner = () => (
   <div className="min-h-screen bg-background flex items-center justify-center">
@@ -37,7 +37,6 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Home />} />
-            <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/order/:id" element={<OrderConfirmation />} />
           </Route>
@@ -50,6 +49,7 @@ export default function App() {
           <Route path="/admin/skus" element={<ProtectedRoute><SkuManagement /></ProtectedRoute>} />
           <Route path="/admin/orders" element={<ProtectedRoute><OrderManagement /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
+          <Route path="/admin/waitlist" element={<ProtectedRoute><AdminWaitlist /></ProtectedRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

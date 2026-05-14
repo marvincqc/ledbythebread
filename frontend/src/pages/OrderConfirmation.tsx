@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import type { Order, OrderStatus } from "../types";
+import type { Order, OrderStatus, OrderMessage } from "../types";
 import { CUSTOMER_STATUS_LABELS } from "../types";
+import { WHATSAPP_LINK } from "../lib/constants";
 
 const TIMELINE_STEPS: { statuses: OrderStatus[]; label: string; icon: string }[] = [
-  { statuses: ["pending"],             label: "Order Received",  icon: "📋" },
+  { statuses: ["pending"],             label: "Order Received",   icon: "📋" },
   { statuses: ["confirmed"],           label: "Payment Verified", icon: "✅" },
-  { statuses: ["preparing"],           label: "Being Prepared",  icon: "👨‍🍳" },
-  { statuses: ["delivered"],           label: "Delivered",       icon: "🎉" },
+  { statuses: ["preparing"],           label: "Being Prepared",   icon: "👨‍🍳" },
+  { statuses: ["delivered"],           label: "Delivered",        icon: "🎉" },
 ];
 
 function formatOrderId(createdAt: string): string {
@@ -24,13 +25,13 @@ function getStepIndex(status: OrderStatus): number {
 }
 
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-SG", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-SG", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
+}
+
+function formatTime(isoStr: string): string {
+  return new Date(isoStr).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" });
 }
 
 export default function OrderConfirmation() {
@@ -38,6 +39,19 @@ export default function OrderConfirmation() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const [messages, setMessages] = useState<OrderMessage[]>([]);
+  const [newMsg, setNewMsg] = useState("");
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  function handleCopyLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   useEffect(() => {
     async function fetchOrder() {
@@ -61,30 +75,42 @@ export default function OrderConfirmation() {
 
     fetchOrder();
 
-    // Real-time subscription for status updates
     if (!id) return;
-    const channel = supabase
+
+    const orderChannel = supabase
       .channel(`order-${id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-          filter: `id=eq.${id}`,
-        },
-        (payload) => {
-          setOrder((prev) =>
-            prev ? { ...prev, status: payload.new.status } : prev
-          );
-        }
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${id}` },
+        (payload) => { setOrder((prev) => prev ? { ...prev, status: payload.new.status } : prev); }
+      )
+      .subscribe();
+
+    supabase.from("order_messages").select("*").eq("order_id", id).order("created_at")
+      .then(({ data }) => setMessages((data ?? []) as OrderMessage[]));
+
+    const msgChannel = supabase
+      .channel(`messages-${id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_messages", filter: `order_id=eq.${id}` },
+        (payload) => { setMessages((prev) => [...prev, payload.new as OrderMessage]); }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(orderChannel);
+      supabase.removeChannel(msgChannel);
     };
   }, [id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function sendMessage() {
+    if (!newMsg.trim() || !id) return;
+    setSendingMsg(true);
+    await supabase.from("order_messages").insert({ order_id: id, sender: "customer", body: newMsg.trim() });
+    setNewMsg("");
+    setSendingMsg(false);
+  }
 
   if (loading) {
     return (
@@ -98,13 +124,9 @@ export default function OrderConfirmation() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <span className="text-5xl block mb-4">❌</span>
-        <h2 className="font-heading text-2xl font-semibold text-primary mb-2">
-          Order Not Found
-        </h2>
+        <h2 className="font-heading text-2xl font-semibold text-primary mb-2">Order Not Found</h2>
         <p className="text-text-muted mb-6">{error}</p>
-        <Link to="/" className="btn-primary">
-          Go Home
-        </Link>
+        <Link to="/" className="btn-primary">Go Home</Link>
       </div>
     );
   }
@@ -113,72 +135,77 @@ export default function OrderConfirmation() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <span className="text-5xl block mb-4">🚫</span>
-        <h2 className="font-heading text-2xl font-semibold text-error mb-2">
-          Order Cancelled
-        </h2>
-        <p className="text-text-muted mb-6">
-          Order #{formatOrderId(order.created_at)} has been cancelled.
-        </p>
-        <Link to="/" className="btn-primary">
-          Place a New Order
-        </Link>
+        <h2 className="font-heading text-2xl font-semibold text-error mb-2">Order Cancelled</h2>
+        <p className="text-text-muted mb-6">Order #{formatOrderId(order.created_at)} has been cancelled.</p>
+        <Link to="/" className="btn-primary">Place a New Order</Link>
       </div>
     );
   }
 
   const currentStep = getStepIndex(order.status as OrderStatus);
-  const guestName =
-    order.guest_info?.name ?? "Customer";
+  const guestName = order.guest_info?.name ?? "Customer";
+  const isPending = order.status === "pending";
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      {/* Success banner */}
-      <div className="bg-success/10 border border-success/30 rounded-card p-5 mb-6 text-center">
-        <span className="text-4xl block mb-2">🎉</span>
-        <h1 className="font-heading text-2xl font-bold text-success mb-1">
-          Order Confirmed!
+      {/* Banner — wording changes based on whether payment is verified */}
+      <div className={`border rounded-card p-5 mb-6 text-center ${
+        isPending ? "bg-yellow-50 border-yellow-200" : "bg-success/10 border-success/30"
+      }`}>
+        <span className="text-4xl block mb-2">{isPending ? "📋" : "🎉"}</span>
+        <h1 className={`font-heading text-2xl font-bold mb-1 ${isPending ? "text-yellow-800" : "text-success"}`}>
+          {isPending ? "Order Received!" : "Order Confirmed!"}
         </h1>
         <p className="text-text-muted text-sm">
-          Thank you, {guestName}! We'll confirm your order once payment is verified.
+          {isPending
+            ? `Thanks, ${guestName}! We'll confirm once your payment is verified.`
+            : `Thank you, ${guestName}! Your order is confirmed.`}
         </p>
         <p className="font-mono text-xs text-text-muted mt-2 bg-white rounded px-2 py-1 inline-block">
           Order ID: {formatOrderId(order.created_at)}
         </p>
+        <button
+          onClick={handleCopyLink}
+          className="mt-3 flex items-center gap-1.5 text-primary/60 hover:text-primary text-xs mx-auto transition-colors"
+        >
+          {copied ? (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              Copied!
+            </>
+          ) : (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              Copy order link
+            </>
+          )}
+        </button>
       </div>
 
       {/* Status Timeline */}
       <div className="card p-5 mb-6">
-        <h2 className="font-heading text-lg font-semibold text-primary mb-5">
-          Order Status
-        </h2>
-
+        <h2 className="font-heading text-lg font-semibold text-primary mb-5">Order Status</h2>
         <div className="relative">
-          {/* Progress line */}
           <div className="absolute left-5 top-8 bottom-8 w-0.5 bg-primary/10" />
           <div
             className="absolute left-5 top-8 w-0.5 bg-primary transition-all duration-700"
-            style={{
-              height: `${(currentStep / (TIMELINE_STEPS.length - 1)) * 100}%`,
-            }}
+            style={{ height: `${(currentStep / (TIMELINE_STEPS.length - 1)) * 100}%` }}
           />
-
           <div className="space-y-6">
             {TIMELINE_STEPS.map((step, index) => {
               const isDone = index < currentStep;
               const isCurrent = index === currentStep;
-
               return (
                 <div key={step.label} className="flex items-center gap-4 relative">
-                  {/* Step circle */}
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 z-10 transition-all ${
-                      isDone
-                        ? "bg-primary text-white"
-                        : isCurrent
-                        ? "bg-primary text-white ring-4 ring-primary/20"
-                        : "bg-white border-2 border-primary/20 text-text-muted"
-                    }`}
-                  >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 z-10 transition-all ${
+                    isDone ? "bg-primary text-white"
+                    : isCurrent ? "bg-primary text-white ring-4 ring-primary/20"
+                    : "bg-white border-2 border-primary/20 text-text-muted"
+                  }`}>
                     {isDone ? (
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -187,13 +214,8 @@ export default function OrderConfirmation() {
                       <span className="text-lg">{step.icon}</span>
                     )}
                   </div>
-
                   <div>
-                    <p
-                      className={`font-semibold ${
-                        isCurrent ? "text-primary" : "text-text-muted"
-                      }`}
-                    >
+                    <p className={`font-semibold ${isCurrent ? "text-primary" : "text-text-muted"}`}>
                       {step.label}
                     </p>
                     {isCurrent && (
@@ -209,11 +231,9 @@ export default function OrderConfirmation() {
         </div>
       </div>
 
-      {/* Order details */}
+      {/* Delivery Details */}
       <div className="card p-5 mb-6">
-        <h2 className="font-heading text-lg font-semibold text-primary mb-4">
-          Delivery Details
-        </h2>
+        <h2 className="font-heading text-lg font-semibold text-primary mb-4">Delivery Details</h2>
         <div className="space-y-2 text-sm">
           <div className="flex gap-2">
             <span className="text-text-muted w-28 flex-shrink-0">Date</span>
@@ -231,7 +251,7 @@ export default function OrderConfirmation() {
           </div>
           <div className="flex gap-2">
             <span className="text-text-muted w-28 flex-shrink-0">Payment</span>
-            <span className="font-medium">PayNow · Pending verification</span>
+            <span className="font-medium">PayNow · {isPending ? "Pending verification" : "Verified"}</span>
           </div>
         </div>
       </div>
@@ -239,9 +259,7 @@ export default function OrderConfirmation() {
       {/* Items */}
       {order.order_items && order.order_items.length > 0 && (
         <div className="card p-5 mb-6">
-          <h2 className="font-heading text-lg font-semibold text-primary mb-4">
-            Items Ordered
-          </h2>
+          <h2 className="font-heading text-lg font-semibold text-primary mb-4">Items Ordered</h2>
           <div className="space-y-3">
             {order.order_items.map((item) => (
               <div key={item.id} className="flex justify-between text-sm">
@@ -249,37 +267,76 @@ export default function OrderConfirmation() {
                   {item.sku?.name ?? "Item"}{" "}
                   <span className="font-semibold text-text-main">×{item.quantity}</span>
                 </span>
-                <span className="font-medium">
-                  S${(item.unit_price * item.quantity).toFixed(2)}
-                </span>
+                <span className="font-medium">S${(item.unit_price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
             <div className="border-t border-primary/10 pt-2 mt-1 flex justify-between">
               <span className="font-semibold">Total</span>
-              <span className="font-bold text-lg text-primary">
-                S${order.subtotal.toFixed(2)}
-              </span>
+              <span className="font-bold text-lg text-primary">S${order.subtotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
       )}
 
+      {/* Messages */}
+      <div className="card p-5 mb-6">
+        <h2 className="font-heading text-lg font-semibold text-primary mb-4">Messages</h2>
+        <div className="space-y-3 max-h-64 overflow-y-auto mb-4 pr-1">
+          {messages.length === 0 ? (
+            <p className="text-text-muted text-sm text-center py-4">
+              No messages yet. Have a question? Send one below.
+            </p>
+          ) : (
+            messages.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.sender === "customer" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                  msg.sender === "customer"
+                    ? "bg-primary text-white rounded-tr-sm"
+                    : "bg-background border border-primary/10 text-text-main rounded-tl-sm"
+                }`}>
+                  {msg.sender === "admin" && (
+                    <p className="text-xs font-semibold text-primary mb-0.5">Baker</p>
+                  )}
+                  <p className="text-sm leading-relaxed">{msg.body}</p>
+                  <p className={`text-xs mt-1 ${msg.sender === "customer" ? "text-white/60" : "text-text-muted"}`}>
+                    {formatTime(msg.created_at)}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newMsg}
+            onChange={(e) => setNewMsg(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+            placeholder="Send a message to the baker…"
+            className="input flex-1 text-sm py-2"
+            disabled={sendingMsg}
+          />
+          <button
+            onClick={sendMessage}
+            disabled={sendingMsg || !newMsg.trim()}
+            className="btn-primary px-4 py-2 text-sm flex-shrink-0 disabled:opacity-50"
+          >
+            {sendingMsg ? "…" : "Send"}
+          </button>
+        </div>
+      </div>
+
       <div className="text-center space-y-3">
         <p className="text-text-muted text-sm">
           Questions about your order?{" "}
-          <a
-            href="https://wa.me/6591803918"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary font-medium underline underline-offset-2"
-          >
+          <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer"
+            className="text-primary font-medium underline underline-offset-2">
             WhatsApp us
           </a>
           {" "}with your order ID.
         </p>
-        <Link to="/" className="btn-primary inline-block">
-          Order More Pandesal
-        </Link>
+        <Link to="/" className="btn-primary inline-block">Order More Pandesal</Link>
       </div>
     </div>
   );

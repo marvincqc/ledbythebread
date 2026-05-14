@@ -111,7 +111,9 @@ export default function CartPanel() {
                   <div className="flex items-center gap-2 mt-2">
                     <button
                       onClick={() =>
-                        updateQuantity(item.sku.id, item.quantity - 1)
+                        item.quantity <= (item.sku.min_qty ?? 1)
+                          ? removeItem(item.sku.id)
+                          : updateQuantity(item.sku.id, item.quantity - 1)
                       }
                       className="w-7 h-7 rounded-full bg-primary/10 hover:bg-primary/20 flex items-center justify-center text-primary font-bold text-lg leading-none transition-colors"
                       aria-label="Decrease quantity"

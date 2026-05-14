@@ -3,6 +3,7 @@ import { Outlet, Link } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
 import CartPanel from "./CartPanel";
+import { WHATSAPP_LINK } from "../lib/constants";
 
 
 const CartButton = ({ onClick, totalItems }: { onClick: () => void; totalItems: number }) => (
@@ -118,7 +119,7 @@ export default function Layout() {
           <p className="font-heading text-lg font-semibold mb-1">Led by the Bread · Singapore Home Bakery</p>
           <p className="text-white/70 text-sm">Home-baked Filipino bread rolls, made fresh daily in Singapore.</p>
           <a
-            href="https://wa.me/6591803918"
+            href={WHATSAPP_LINK}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm mt-3 transition-colors"

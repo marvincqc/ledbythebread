@@ -111,6 +111,25 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface WaitlistEntry {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  delivery_date: string;
+  slot_type: SlotType;
+  created_at: string;
+}
+
+export interface OrderMessage {
+  id: string;
+  order_id: string;
+  sender: "admin" | "customer";
+  body: string;
+  created_at: string;
+  read_at: string | null;
+}
+
 const ALL_STATUSES: OrderStatus[] = ["pending", "confirmed", "preparing", "delivered", "cancelled"];
 
 // Admin can move any order to any status freely

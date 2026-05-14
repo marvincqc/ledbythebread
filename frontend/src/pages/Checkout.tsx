@@ -5,6 +5,7 @@ import { useAuthStore } from "../store/authStore";
 import { supabase } from "../lib/supabase";
 import { callEdgeFunction } from "../lib/supabase";
 import type { DeliverySlot, SlotType } from "../types";
+import { WHATSAPP_LINK } from "../lib/constants";
 
 function SectionHeader({ step, title }: { step: number; title: string }) {
   return (
@@ -68,24 +69,38 @@ export default function Checkout() {
 
   // PayNow proof
   const [payNowUen, setPayNowUen] = useState<string | null>(null);
-  const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
   const [proofUrl, setProofUrl] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [weeksOut, setWeeksOut] = useState(2);
+  const [minOrderValue, setMinOrderValue] = useState(0);
+  const [minOrderValueEnabled, setMinOrderValueEnabled] = useState(false);
+
+  // Waitlist state — shown when user taps a full slot
+  const [waitlistTarget, setWaitlistTarget] = useState<{ date: string; slot: SlotType } | null>(null);
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false);
+  const [waitlistError, setWaitlistError] = useState<string | null>(null);
 
   const sub = subtotal();
-  const dates = getNextDays(14);
+  const dates = getNextDays(weeksOut * 7);
 
   useEffect(() => {
-    supabase.from("admin_settings").select("value").eq("key", "paynow_uen").single()
-      .then(({ data }) => { if (data) setPayNowUen(data.value); });
+    supabase.from("admin_settings").select("key, value")
+      .in("key", ["paynow_uen", "max_weeks_out", "store_min_order_value", "store_min_order_value_enabled"])
+      .then(({ data }) => {
+        if (!data) return;
+        setPayNowUen(data.find((s) => s.key === "paynow_uen")?.value ?? null);
+        setWeeksOut(parseInt(data.find((s) => s.key === "max_weeks_out")?.value ?? "2") || 2);
+        setMinOrderValue(parseFloat(data.find((s) => s.key === "store_min_order_value")?.value ?? "0") || 0);
+        setMinOrderValueEnabled(data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true");
+      });
   }, []);
 
   async function handleProofUpload(file: File) {
-    setProofFile(file);
     setProofPreview(URL.createObjectURL(file));
     setUploadingProof(true);
     setProofUrl(null);
@@ -97,7 +112,6 @@ export default function Checkout() {
 
     if (uploadError) {
       setError("Failed to upload payment proof: " + uploadError.message);
-      setProofFile(null);
       setProofPreview(null);
     } else {
       const { data: urlData } = supabase.storage.from("payment-proofs").getPublicUrl(filename);
@@ -172,6 +186,33 @@ export default function Checkout() {
     }
   }
 
+  async function handleJoinWaitlist() {
+    if (!waitlistTarget) return;
+    if (!name.trim() || !phone.trim() || !email.trim()) {
+      setWaitlistError("Please fill in your name, phone, and email to join the waitlist.");
+      return;
+    }
+    setWaitlistLoading(true);
+    setWaitlistError(null);
+    const { error: insertError } = await supabase.from("slot_waitlist").insert({
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
+      delivery_date: waitlistTarget.date,
+      slot_type: waitlistTarget.slot,
+    });
+    setWaitlistLoading(false);
+    if (insertError) {
+      setWaitlistError(
+        insertError.code === "23505"
+          ? "You're already on the waitlist for this slot."
+          : "Failed to join waitlist. Please try again."
+      );
+    } else {
+      setWaitlistSuccess(true);
+    }
+  }
+
   const getSlotsForDate = (date: string) => slots.filter((s) => s.delivery_date === date);
 
   const getSlotStatus = (slot: DeliverySlot) => {
@@ -210,6 +251,11 @@ export default function Checkout() {
     const belowMinQty = items.find((i) => i.quantity < (i.sku.min_qty ?? 1));
     if (belowMinQty) {
       setError(`"${belowMinQty.sku.name}" requires a minimum of ${belowMinQty.sku.min_qty ?? 1} sets.`);
+      return;
+    }
+
+    if (minOrderValueEnabled && sub < minOrderValue) {
+      setError(`Minimum order value is S$${minOrderValue.toFixed(2)}. Your cart total is S$${sub.toFixed(2)}.`);
       return;
     }
 
@@ -287,7 +333,7 @@ export default function Checkout() {
             <div className="text-center py-4">
               <p className="text-text-muted font-medium">No delivery slots available right now.</p>
               <p className="text-text-muted text-sm mt-1">
-                <a href="https://wa.me/6591803918" target="_blank" rel="noopener noreferrer" className="text-primary underline">WhatsApp us</a> to check availability.
+                <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-primary underline">WhatsApp us</a> to check availability.
               </p>
             </div>
           ) : (
@@ -299,7 +345,7 @@ export default function Checkout() {
                   const isSelected = selectedDate === date;
                   return (
                     <button key={date} type="button"
-                      onClick={() => { setSelectedDate(date); setSelectedSlot(""); }}
+                      onClick={() => { setSelectedDate(date); setSelectedSlot(""); setWaitlistTarget(null); setWaitlistSuccess(false); setWaitlistError(null); }}
                       disabled={!hasOpen}
                       className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-center transition-all ${
                         isSelected ? "bg-primary text-white font-semibold shadow"
@@ -319,45 +365,100 @@ export default function Checkout() {
               </div>
 
               {selectedDate && (
-                <div className="grid grid-cols-2 gap-3">
-                  {(["morning", "evening"] as SlotType[]).map((slotType) => {
-                    const slot = getSlotsForDate(selectedDate).find((s) => s.slot_type === slotType);
-                    const status = slot ? getSlotStatus(slot) : "closed";
-                    const isSelected = selectedSlot === slotType;
-                    const available = status === "open";
-                    return (
-                      <button key={slotType} type="button"
-                        onClick={() => available && setSelectedSlot(slotType)}
-                        disabled={!available}
-                        className={`relative p-4 rounded-card border-2 text-left transition-all ${
-                          isSelected ? "border-primary bg-primary/5"
-                          : available ? "border-primary/20 hover:border-primary/50 bg-white"
-                          : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
-                        }`}
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(["morning", "evening"] as SlotType[]).map((slotType) => {
+                      const slot = getSlotsForDate(selectedDate).find((s) => s.slot_type === slotType);
+                      const status = slot ? getSlotStatus(slot) : "closed";
+                      const isSelected = selectedSlot === slotType;
+                      const isWaitlistTarget = waitlistTarget?.date === selectedDate && waitlistTarget?.slot === slotType;
+                      return (
+                        <button key={slotType} type="button"
+                          onClick={() => {
+                            if (status === "open") {
+                              setSelectedSlot(slotType);
+                              setWaitlistTarget(null);
+                              setWaitlistSuccess(false);
+                              setWaitlistError(null);
+                            } else if (status === "full") {
+                              setSelectedSlot("");
+                              setWaitlistTarget({ date: selectedDate, slot: slotType });
+                              setWaitlistSuccess(false);
+                              setWaitlistError(null);
+                            }
+                          }}
+                          disabled={status === "closed"}
+                          className={`relative p-4 rounded-card border-2 text-left transition-all ${
+                            isSelected ? "border-primary bg-primary/5"
+                            : isWaitlistTarget ? "border-amber-400 bg-amber-50"
+                            : status === "open" ? "border-primary/20 hover:border-primary/50 bg-white"
+                            : status === "full" ? "border-amber-200 bg-amber-50/50 hover:border-amber-400 cursor-pointer"
+                            : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xl">{slotType === "morning" ? "🌅" : "🌇"}</span>
+                            <span className="font-semibold capitalize text-text-main">{slotType}</span>
+                            {isSelected && (
+                              <span className="ml-auto w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-text-muted">
+                            {slotType === "morning" ? "7:00 AM – 10:00 AM" : "5:00 PM – 8:00 PM"} · Delivered to your door
+                          </p>
+                          <p className="text-xs mt-1">
+                            {status === "open" && slot && <span className="text-success font-medium">{slot.max_orders - slot.current_orders} slots left</span>}
+                            {status === "full" && <span className="text-amber-600 font-medium">Fully booked · tap to join waitlist</span>}
+                            {status === "closed" && <span className="text-text-muted">Closed</span>}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Waitlist inline form */}
+                  {waitlistTarget?.date === selectedDate && !waitlistSuccess && (
+                    <div className="mt-4 bg-amber-50 border border-amber-200 rounded-card p-4">
+                      <p className="font-semibold text-amber-800 text-sm mb-1">
+                        Join the waitlist for {waitlistTarget.slot === "morning" ? "Morning" : "Evening"} · {formatDate(waitlistTarget.date)}
+                      </p>
+                      <p className="text-amber-700 text-xs mb-3">
+                        We'll contact you if a spot opens up. Fill in your details below — they'll also be used if you checkout with another slot.
+                      </p>
+                      <div className="space-y-2 mb-3">
+                        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="input text-sm py-2" />
+                        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number (+65 9XXX XXXX)" className="input text-sm py-2" />
+                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" className="input text-sm py-2" />
+                      </div>
+                      {waitlistError && <p className="text-error text-xs mb-2">{waitlistError}</p>}
+                      <button
+                        type="button"
+                        onClick={handleJoinWaitlist}
+                        disabled={waitlistLoading}
+                        className="w-full btn-primary py-2 text-sm"
                       >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xl">{slotType === "morning" ? "🌅" : "🌇"}</span>
-                          <span className="font-semibold capitalize text-text-main">{slotType}</span>
-                          {isSelected && (
-                            <span className="ml-auto w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-text-muted">
-                          {slotType === "morning" ? "7:00 AM – 10:00 AM" : "5:00 PM – 8:00 PM"} · Delivered to your door
-                        </p>
-                        <p className="text-xs mt-1">
-                          {status === "open" && slot && <span className="text-success font-medium">{slot.max_orders - slot.current_orders} slots left</span>}
-                          {status === "full" && <span className="text-error font-medium">Fully booked</span>}
-                          {status === "closed" && <span className="text-text-muted">Closed</span>}
-                        </p>
+                        {waitlistLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Joining…
+                          </span>
+                        ) : "Join Waitlist"}
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+                  )}
+
+                  {waitlistTarget?.date === selectedDate && waitlistSuccess && (
+                    <div className="mt-4 bg-success/10 border border-success/30 rounded-card p-4 text-center">
+                      <span className="text-2xl block mb-1">✅</span>
+                      <p className="font-semibold text-success text-sm">You're on the waitlist!</p>
+                      <p className="text-text-muted text-xs mt-1">We'll WhatsApp you if a spot opens up for {waitlistTarget.slot === "morning" ? "Morning" : "Evening"} on {formatDate(waitlistTarget.date)}.</p>
+                    </div>
+                  )}
+                </>
               )}
               {!selectedDate && <p className="text-text-muted text-sm mt-2">Select a date above to see available slots.</p>}
             </>

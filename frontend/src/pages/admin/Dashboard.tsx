@@ -13,6 +13,7 @@ interface DashboardStats {
   revenueToday: number;
   pendingOrders: number;
   totalOrdersAllTime: number;
+  unreadMessages: number;
 }
 
 function formatOrderId(createdAt: string): string {
@@ -27,7 +28,7 @@ export default function AdminDashboard() {
   const cached = pageCache.get<{ stats: DashboardStats; recentOrders: Order[] }>('admin-dashboard');
 
   const [stats, setStats] = useState<DashboardStats>(
-    cached?.stats ?? { totalOrdersToday: 0, morningOrdersToday: 0, eveningOrdersToday: 0, revenueToday: 0, pendingOrders: 0, totalOrdersAllTime: 0 }
+    cached?.stats ?? { totalOrdersToday: 0, morningOrdersToday: 0, eveningOrdersToday: 0, revenueToday: 0, pendingOrders: 0, totalOrdersAllTime: 0, unreadMessages: 0 }
   );
   const [recentOrders, setRecentOrders] = useState<Order[]>(cached?.recentOrders ?? []);
   const [loading, setLoading] = useState(!cached);
@@ -38,10 +39,11 @@ export default function AdminDashboard() {
     async function loadDashboard(silent = false) {
       if (!silent) setLoading(true);
       try {
-        const [todayRes, allOrdersRes, recentRes] = await Promise.all([
+        const [todayRes, allOrdersRes, recentRes, unreadRes] = await Promise.all([
           supabase.from("orders").select("*").eq("delivery_date", today).neq("status", "cancelled"),
           supabase.from("orders").select("id", { count: "exact", head: true }).neq("status", "cancelled"),
           supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(10),
+          supabase.from("order_messages").select("id", { count: "exact", head: true }).eq("sender", "customer").is("read_at", null),
         ]);
 
         if (todayRes.data) {
@@ -53,6 +55,7 @@ export default function AdminDashboard() {
             revenueToday: todayOrders.filter((o) => o.status !== "pending").reduce((sum, o) => sum + o.subtotal, 0),
             pendingOrders: todayOrders.filter((o) => o.status === "pending").length,
             totalOrdersAllTime: allOrdersRes.count ?? 0,
+            unreadMessages: unreadRes.count ?? 0,
           };
           const freshOrders = (recentRes.data ?? []) as Order[];
           setStats(freshStats);
@@ -67,8 +70,11 @@ export default function AdminDashboard() {
     loadDashboard(!!cached);
 
     const channel = supabase
-      .channel("dashboard-orders")
+      .channel("dashboard-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
+        loadDashboard(true);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_messages" }, () => {
         loadDashboard(true);
       })
       .subscribe();
@@ -82,19 +88,21 @@ export default function AdminDashboard() {
   };
 
   const statCards = [
-    { label: "Orders Today",   value: stats.totalOrdersToday,              icon: "📦", color: "bg-blue-50 border-blue-200" },
-    { label: "Morning Slot",   value: stats.morningOrdersToday,            icon: "🌅", color: "bg-yellow-50 border-yellow-200" },
-    { label: "Evening Slot",   value: stats.eveningOrdersToday,            icon: "🌇", color: "bg-orange-50 border-orange-200" },
-    { label: "Revenue Today",  value: `S$${stats.revenueToday.toFixed(2)}`, icon: "💰", color: "bg-green-50 border-green-200" },
-    { label: "Pending Orders", value: stats.pendingOrders,                 icon: "⏳", color: "bg-amber-50 border-amber-200" },
-    { label: "Total Orders",   value: stats.totalOrdersAllTime,            icon: "📊", color: "bg-purple-50 border-purple-200" },
+    { label: "Orders Today",    value: stats.totalOrdersToday,               icon: "📦", color: "bg-blue-50 border-blue-200" },
+    { label: "Morning Slot",    value: stats.morningOrdersToday,             icon: "🌅", color: "bg-yellow-50 border-yellow-200" },
+    { label: "Evening Slot",    value: stats.eveningOrdersToday,             icon: "🌇", color: "bg-orange-50 border-orange-200" },
+    { label: "Revenue Today",   value: `S$${stats.revenueToday.toFixed(2)}`, icon: "💰", color: "bg-green-50 border-green-200" },
+    { label: "Pending Orders",  value: stats.pendingOrders,                  icon: "⏳", color: "bg-amber-50 border-amber-200" },
+    { label: "Total Orders",    value: stats.totalOrdersAllTime,             icon: "📊", color: "bg-purple-50 border-purple-200" },
+    { label: "Unread Messages", value: stats.unreadMessages,                 icon: "💬", color: stats.unreadMessages > 0 ? "bg-indigo-100 border-indigo-300" : "bg-indigo-50 border-indigo-200" },
   ];
 
   const navLinks = [
-    { to: "/admin/orders", label: "Order Management",  icon: "📋", desc: "View and update order statuses" },
-    { to: "/admin/slots",  label: "Slot Management",   icon: "📅", desc: "Manage delivery slots and availability" },
-    { to: "/admin/skus",   label: "Product Management",icon: "🍞", desc: "Add, edit, and manage pandesal SKUs" },
-    { to: "/admin/settings",label: "Store Settings",    icon: "⚙️", desc: "Configure minimum order value and delivery" },
+    { to: "/admin/orders",   label: "Order Management",  icon: "📋", desc: "View and update order statuses",                    badge: stats.unreadMessages },
+    { to: "/admin/slots",    label: "Slot Management",   icon: "📅", desc: "Manage delivery slots and availability",             badge: 0 },
+    { to: "/admin/skus",     label: "Product Management",icon: "🍞", desc: "Add, edit, and manage pandesal SKUs",                badge: 0 },
+    { to: "/admin/settings", label: "Store Settings",    icon: "⚙️", desc: "Configure minimum order value and delivery",        badge: 0 },
+    { to: "/admin/waitlist", label: "Waitlist",          icon: "⏳", desc: "Manage waitlist entries and create priority orders", badge: 0 },
   ];
 
   return (
@@ -128,7 +136,7 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
               {statCards.map((stat) => (
                 <div key={stat.label} className={`rounded-card border p-4 ${stat.color}`}>
                   <div className="text-2xl mb-1">{stat.icon}</div>
@@ -138,9 +146,14 @@ export default function AdminDashboard() {
               ))}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
               {navLinks.map((link) => (
-                <Link key={link.to} to={link.to} className="card p-5 hover:shadow-md hover:border-primary/30 transition-all group">
+                <Link key={link.to} to={link.to} className="card p-5 hover:shadow-md hover:border-primary/30 transition-all group relative">
+                  {link.badge > 0 && (
+                    <span className="absolute top-3 right-3 bg-indigo-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                      {link.badge}
+                    </span>
+                  )}
                   <span className="text-3xl block mb-2">{link.icon}</span>
                   <h3 className="font-semibold text-text-main group-hover:text-primary transition-colors">{link.label}</h3>
                   <p className="text-text-muted text-xs mt-1">{link.desc}</p>

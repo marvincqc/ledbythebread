@@ -7,20 +7,29 @@ import { pageCache } from "../lib/pageCache";
 export default function Home() {
   const [skus, setSkus] = useState<Sku[]>(() => pageCache.get<Sku[]>('home-skus') ?? []);
   const [loading, setLoading] = useState(!pageCache.get('home-skus'));
+  const [storeMinValue, setStoreMinValue] = useState(0);
+  const [storeMinEnabled, setStoreMinEnabled] = useState(false);
 
   useEffect(() => {
     async function load() {
       if (!pageCache.get('home-skus')) setLoading(true);
       try {
-        const { data } = await supabase
-          .from("skus")
-          .select("*")
-          .eq("is_active", true)
-          .order("is_promo", { ascending: false })
-          .order("sort_order", { ascending: true });
-        if (data) {
-          setSkus(data as Sku[]);
-          pageCache.set('home-skus', data);
+        const [skusRes, settingsRes] = await Promise.all([
+          supabase.from("skus").select("*").eq("is_active", true)
+            .order("is_promo", { ascending: false })
+            .order("sort_order", { ascending: true }),
+          supabase.from("admin_settings").select("key, value")
+            .in("key", ["store_min_order_value", "store_min_order_value_enabled"]),
+        ]);
+
+        if (skusRes.data) {
+          setSkus(skusRes.data as Sku[]);
+          pageCache.set('home-skus', skusRes.data);
+        }
+
+        if (settingsRes.data) {
+          setStoreMinEnabled(settingsRes.data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true");
+          setStoreMinValue(parseFloat(settingsRes.data.find((s) => s.key === "store_min_order_value")?.value ?? "0") || 0);
         }
       } catch (e) {
         console.error("Failed to load products:", e);
@@ -31,7 +40,14 @@ export default function Home() {
     load();
   }, []);
 
-  const minOrder = skus.length > 0 ? Math.min(...skus.map((s) => s.min_qty ?? 6)) : null;
+  const productMinQty = skus.length > 0 ? Math.min(...skus.map((s) => s.min_qty ?? 6)) : null;
+  const activeStoreMin = storeMinEnabled && storeMinValue > 0;
+
+  const minOrderStat = activeStoreMin
+    ? { label: "Min. Order", value: `S$${storeMinValue.toFixed(2)}` }
+    : productMinQty
+    ? { label: "Min. Order", value: `${productMinQty} sets` }
+    : null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -50,8 +66,8 @@ export default function Home() {
         <div className="flex justify-center gap-8 mt-8 mb-2">
           {[
             { label: "Made Fresh", value: "Daily" },
-            { label: "Delivery Slots", value: "2×/day" },
-            ...(minOrder ? [{ label: "Min. Order", value: `${minOrder} sets` }] : []),
+            { label: "Delivery Slots", value: "2 Slots/Day" },
+            ...(minOrderStat ? [minOrderStat] : []),
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="font-heading font-bold text-2xl text-primary">{stat.value}</p>
@@ -82,7 +98,11 @@ export default function Home() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {skus.map((sku) => (
-            <SkuCard key={sku.id} sku={sku} />
+            <SkuCard
+              key={sku.id}
+              sku={sku}
+              storeMinValue={activeStoreMin ? storeMinValue : 0}
+            />
           ))}
         </div>
       )}
@@ -90,11 +110,17 @@ export default function Home() {
   );
 }
 
-function SkuCard({ sku }: { sku: Sku }) {
+function SkuCard({ sku, storeMinValue }: { sku: Sku; storeMinValue: number }) {
   const { items, addItem, updateQuantity, removeItem } = useCartStore();
   const cartItem = items.find((i) => i.sku.id === sku.id);
   const cartQty = cartItem?.quantity ?? 0;
   const minQty = sku.min_qty ?? 6;
+
+  // When adding for the first time, add enough to clear both the per-product minimum
+  // and the store minimum order value (whichever requires more sets).
+  const addQty = storeMinValue > 0
+    ? Math.max(minQty, Math.ceil(storeMinValue / sku.price))
+    : minQty;
 
   return (
     <div className="card flex flex-col overflow-hidden hover:shadow-md transition-shadow">
@@ -139,13 +165,13 @@ function SkuCard({ sku }: { sku: Sku }) {
 
           {cartQty === 0 ? (
             <button
-              onClick={() => addItem(sku, minQty)}
+              onClick={() => addItem(sku, addQty)}
               className="flex items-center gap-1.5 px-4 py-2 rounded-button font-semibold text-sm bg-primary text-white hover:bg-primary-dark transition-all active:scale-95"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Add
+              Add {addQty}
             </button>
           ) : (
             <div className="flex items-center gap-2">
