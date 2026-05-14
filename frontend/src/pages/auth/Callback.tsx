@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
@@ -7,6 +7,7 @@ import type { Session } from "@supabase/supabase-js";
 export default function AuthCallback() {
   const { setUser, fetchProfile } = useAuthStore();
   const navigate = useNavigate();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const next = localStorage.getItem("auth_redirect") || "/admin";
@@ -22,26 +23,61 @@ export default function AuthCallback() {
       navigate(next, { replace: true });
     }
 
-    // Check immediately — PKCE exchange may already be complete
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) proceed(session);
-    });
+    async function handleCallback() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const errorParam = params.get("error");
+      const errorDesc = params.get("error_description");
 
-    // Listen in case exchange hasn't fired yet
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) proceed(session);
-    });
+      // OAuth provider returned an error
+      if (errorParam) {
+        setErrorMsg(errorDesc ?? errorParam);
+        setTimeout(() => navigate("/admin/login", { replace: true }), 3000);
+        return;
+      }
 
-    // Give up after 8s
-    const timer = setTimeout(() => {
-      if (!done) navigate("/admin/login", { replace: true });
-    }, 8000);
+      // PKCE: exchange the code for a session explicitly
+      if (code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(
+          window.location.href
+        );
+        if (error) {
+          setErrorMsg(error.message);
+          setTimeout(() => navigate("/admin/login", { replace: true }), 3000);
+          return;
+        }
+        if (data.session) {
+          await proceed(data.session);
+          return;
+        }
+      }
 
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timer);
-    };
+      // No code — check if already has a session (e.g. page refresh)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await proceed(session);
+        return;
+      }
+
+      // Nothing worked
+      navigate("/admin/login", { replace: true });
+    }
+
+    handleCallback();
   }, []);
+
+  if (errorMsg) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center px-4">
+          <span className="text-5xl block mb-4">🍞</span>
+          <p className="text-error font-medium mb-2">Sign in failed</p>
+          <p className="text-text-muted text-sm">{errorMsg}</p>
+          <p className="text-text-muted text-xs mt-2">Redirecting back to login…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
