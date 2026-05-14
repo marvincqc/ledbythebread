@@ -286,11 +286,12 @@ export default function Checkout() {
       });
       if (fnError || !data?.order_id) {
         setError(fnError ?? "Failed to place order. Please try again.");
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
       orderPlaced.current = true;
       clearCart();
-      navigate(`/order/${data.order_id}`);
+      window.location.href = `/order/${data.order_id}`;
     } finally {
       setLoading(false);
     }
