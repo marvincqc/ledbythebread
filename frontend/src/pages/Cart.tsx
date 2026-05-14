@@ -65,7 +65,7 @@ export default function Cart() {
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-text-main truncate">{item.sku.name}</h3>
               <p className="text-primary font-medium text-sm">
-                S${item.sku.price.toFixed(2)} ea.
+                S${item.sku.price.toFixed(2)}
               </p>
 
               <div className="flex items-center gap-3 mt-3">

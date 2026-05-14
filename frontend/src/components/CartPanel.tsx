@@ -98,7 +98,6 @@ export default function CartPanel() {
                   </p>
                   <p className="text-primary font-semibold text-sm">
                     S${item.sku.price.toFixed(2)}{" "}
-                    <span className="text-text-muted font-normal">ea.</span>
                   </p>
 
                   {/* Quantity controls */}
