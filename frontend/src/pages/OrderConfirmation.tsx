@@ -139,7 +139,7 @@ export default function OrderConfirmation() {
           Order Confirmed!
         </h1>
         <p className="text-text-muted text-sm">
-          Thank you, {guestName}! Your pandesal order is on its way.
+          Thank you, {guestName}! We'll confirm your order once payment is verified.
         </p>
         <p className="font-mono text-xs text-text-muted mt-2 bg-white rounded px-2 py-1 inline-block">
           Order ID: {formatOrderId(order.created_at)}
@@ -191,11 +191,7 @@ export default function OrderConfirmation() {
                   <div>
                     <p
                       className={`font-semibold ${
-                        isCurrent
-                          ? "text-primary"
-                          : isDone
-                          ? "text-text-muted line-through"
-                          : "text-text-muted"
+                        isCurrent ? "text-primary" : "text-text-muted"
                       }`}
                     >
                       {step.label}
@@ -270,7 +266,16 @@ export default function OrderConfirmation() {
 
       <div className="text-center space-y-3">
         <p className="text-text-muted text-sm">
-          Have questions? Contact us — keep your order ID handy.
+          Questions about your order?{" "}
+          <a
+            href="https://wa.me/6591803918"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary font-medium underline underline-offset-2"
+          >
+            WhatsApp us
+          </a>
+          {" "}with your order ID.
         </p>
         <Link to="/" className="btn-primary inline-block">
           Order More Pandesal

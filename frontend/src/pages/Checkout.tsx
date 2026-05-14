@@ -6,6 +6,17 @@ import { supabase } from "../lib/supabase";
 import { callEdgeFunction } from "../lib/supabase";
 import type { DeliverySlot, SlotType } from "../types";
 
+function SectionHeader({ step, title }: { step: number; title: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+        {step}
+      </span>
+      <h2 className="font-heading text-xl font-semibold text-primary">{title}</h2>
+    </div>
+  );
+}
+
 function getNextDays(count: number): string[] {
   const dates: string[] = [];
   for (let i = 0; i < count; i++) {
@@ -233,17 +244,51 @@ export default function Checkout() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <h1 className="font-heading text-3xl font-bold text-primary mb-6">Checkout</h1>
+      <h1 className="font-heading text-3xl font-bold text-primary mb-2">Checkout</h1>
+      <div className="flex items-center gap-1.5 mb-6 text-xs text-text-muted overflow-x-auto pb-1">
+        {["Order Summary", "Delivery", "Address", "Contact", "Payment"].map((step, i, arr) => (
+          <span key={step} className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="font-medium">{step}</span>
+            {i < arr.length - 1 && <span className="text-primary/30">›</span>}
+          </span>
+        ))}
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
 
+        {/* Order Summary — shown first so customers know what they're paying for */}
+        <div className="card p-5">
+          <SectionHeader step={1} title="Order Summary" />
+          <div className="space-y-2">
+            {items.map((item) => (
+              <div key={item.sku.id} className="flex justify-between text-sm">
+                <span className="text-text-muted">
+                  {item.sku.name} <span className="font-medium text-text-main">×{item.quantity}</span>
+                </span>
+                <span className="font-medium">S${(item.sku.price * item.quantity).toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="border-t border-primary/10 pt-2 mt-2 flex justify-between">
+              <span className="font-semibold">Total</span>
+              <span className="font-bold text-xl text-primary">S${sub.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
         {/* Delivery Slot */}
         <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-4">Select Delivery Slot</h2>
+          <SectionHeader step={2} title="Select Delivery Slot" />
           {slotsLoading ? (
             <div className="flex items-center gap-2 text-text-muted">
               <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               Loading available slots...
+            </div>
+          ) : slots.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-text-muted font-medium">No delivery slots available right now.</p>
+              <p className="text-text-muted text-sm mt-1">
+                <a href="https://wa.me/6591803918" target="_blank" rel="noopener noreferrer" className="text-primary underline">WhatsApp us</a> to check availability.
+              </p>
             </div>
           ) : (
             <>
@@ -302,7 +347,7 @@ export default function Checkout() {
                           )}
                         </div>
                         <p className="text-xs text-text-muted">
-                          {slotType === "morning" ? "7:00 AM – 10:00 AM" : "5:00 PM – 8:00 PM"}
+                          {slotType === "morning" ? "7:00 AM – 10:00 AM" : "5:00 PM – 8:00 PM"} · Delivered to your door
                         </p>
                         <p className="text-xs mt-1">
                           {status === "open" && slot && <span className="text-success font-medium">{slot.max_orders - slot.current_orders} slots left</span>}
@@ -321,7 +366,8 @@ export default function Checkout() {
 
         {/* Delivery Address */}
         <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-4">Delivery Address</h2>
+          <SectionHeader step={3} title="Delivery Address" />
+          <p className="text-text-muted text-xs -mt-2 mb-4">We deliver island-wide across Singapore.</p>
 
           {/* Step 1: Postal code */}
           <div className="mb-4">
@@ -402,7 +448,7 @@ export default function Checkout() {
 
         {/* Contact Details */}
         <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-4">Contact Details</h2>
+          <SectionHeader step={4} title="Contact Details" />
           <div className="space-y-4">
             <div>
               <label className="label" htmlFor="name">Full name</label>
@@ -424,7 +470,7 @@ export default function Checkout() {
 
         {/* PayNow Payment */}
         <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-1">Payment</h2>
+          <SectionHeader step={5} title="Payment" />
           <p className="text-text-muted text-sm mb-4">Scan the QR code with your banking app, then upload your screenshot below.</p>
 
           <div className="flex flex-col items-center mb-4">
@@ -436,6 +482,7 @@ export default function Checkout() {
             <div className="mt-3 text-center">
               <p className="text-sm text-text-muted">Amount to pay</p>
               <p className="font-heading text-2xl font-bold text-primary">S${sub.toFixed(2)}</p>
+              <p className="text-xs text-error font-medium mt-1">Transfer exactly this amount — wrong amounts delay your order.</p>
               {payNowUen && (
                 <p className="text-xs text-text-muted mt-1">UEN: <span className="font-medium text-text-main">{payNowUen}</span></p>
               )}
@@ -477,31 +524,6 @@ export default function Checkout() {
               )}
             </label>
           </div>
-        </div>
-
-        {/* Order Summary */}
-        <div className="card p-5">
-          <h2 className="font-heading text-xl font-semibold text-primary mb-4">Order Summary</h2>
-          <div className="space-y-2">
-            {items.map((item) => (
-              <div key={item.sku.id} className="flex justify-between text-sm">
-                <span className="text-text-muted">
-                  {item.sku.name} <span className="font-medium text-text-main">×{item.quantity}</span>
-                </span>
-                <span className="font-medium">S${(item.sku.price * item.quantity).toFixed(2)}</span>
-              </div>
-            ))}
-            <div className="border-t border-primary/10 pt-2 mt-2 flex justify-between">
-              <span className="font-semibold">Subtotal</span>
-              <span className="font-bold text-xl text-primary">S${sub.toFixed(2)}</span>
-            </div>
-          </div>
-          {selectedDate && selectedSlot && (
-            <div className="mt-3 pt-3 border-t border-primary/10 text-sm text-text-muted">
-              <span className="font-medium text-text-main">Delivery: </span>
-              {formatDate(selectedDate)} · {selectedSlot.charAt(0).toUpperCase() + selectedSlot.slice(1)} slot
-            </div>
-          )}
         </div>
 
         {error && (

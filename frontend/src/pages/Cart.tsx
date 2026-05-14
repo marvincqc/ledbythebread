@@ -143,9 +143,7 @@ export default function Cart() {
           <span className="font-bold text-2xl text-primary">S${sub.toFixed(2)}</span>
         </div>
 
-        <p className="text-text-muted text-xs">
-          Delivery fee determined at checkout based on your location.
-        </p>
+
 
         <button
           onClick={() => navigate("/checkout")}

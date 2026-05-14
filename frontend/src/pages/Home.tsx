@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
-import { useAuthStore } from "../store/authStore";
 import { supabase } from "../lib/supabase";
 import type { Sku } from "../types";
 import { pageCache } from "../lib/pageCache";
@@ -9,10 +7,6 @@ import { pageCache } from "../lib/pageCache";
 export default function Home() {
   const [skus, setSkus] = useState<Sku[]>(() => pageCache.get<Sku[]>('home-skus') ?? []);
   const [loading, setLoading] = useState(!pageCache.get('home-skus'));
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
-
-  const { addItem, openCart } = useCartStore();
-  const { isAdmin } = useAuthStore();
 
   useEffect(() => {
     async function load() {
@@ -34,25 +28,13 @@ export default function Home() {
         setLoading(false);
       }
     }
-
     load();
   }, []);
 
-  const handleAdd = (sku: Sku) => {
-    addItem(sku);
-    setAddedIds((prev) => new Set(prev).add(sku.id));
-    setTimeout(() => {
-      setAddedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(sku.id);
-        return next;
-      });
-    }, 1200);
-  };
+  const minOrder = skus.length > 0 ? Math.min(...skus.map((s) => s.min_qty ?? 6)) : null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      {/* Hero */}
       <section className="mb-10 text-center">
         <div className="inline-block bg-accent/20 text-accent-dark font-semibold text-sm px-4 py-1 rounded-full mb-4">
           Fresh Baked in Singapore · Delivered to Your Door
@@ -65,12 +47,11 @@ export default function Home() {
           Home-baked Filipino bread rolls, made fresh daily in Singapore.
         </p>
 
-        {/* Stats */}
-        <div className="flex justify-center gap-8 mt-8 mb-6">
+        <div className="flex justify-center gap-8 mt-8 mb-2">
           {[
             { label: "Made Fresh", value: "Daily" },
-            { label: "Delivery Slots", value: "2x/day" },
-            { label: "Min. Order", value: "5 sets" },
+            { label: "Delivery Slots", value: "2×/day" },
+            ...(minOrder ? [{ label: "Min. Order", value: `${minOrder} sets` }] : []),
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="font-heading font-bold text-2xl text-primary">{stat.value}</p>
@@ -79,24 +60,9 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Admin shortcut — only shown when already logged in as admin */}
-        {isAdmin && (
-          <div className="flex items-center justify-center">
-            <Link
-              to="/admin"
-              className="flex items-center gap-2 bg-primary text-white text-sm font-medium px-4 py-2 rounded-button hover:bg-primary-dark transition-all"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              Admin Dashboard
-            </Link>
-          </div>
-        )}
+        <p className="text-text-muted text-sm mt-3">Island-wide delivery across Singapore</p>
       </section>
 
-
-      {/* SKU grid */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1, 2, 3].map((i) => (
@@ -111,17 +77,12 @@ export default function Home() {
       ) : skus.length === 0 ? (
         <div className="text-center py-16 text-text-muted">
           <span className="text-5xl block mb-4">🍞</span>
-          <p className="font-medium">No products found</p>
+          <p className="font-medium">No products available right now</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {skus.map((sku) => (
-            <SkuCard
-              key={sku.id}
-              sku={sku}
-              onAdd={() => handleAdd(sku)}
-              justAdded={addedIds.has(sku.id)}
-            />
+            <SkuCard key={sku.id} sku={sku} />
           ))}
         </div>
       )}
@@ -129,25 +90,17 @@ export default function Home() {
   );
 }
 
-function SkuCard({
-  sku,
-  onAdd,
-  justAdded,
-}: {
-  sku: Sku;
-  onAdd: () => void;
-  justAdded: boolean;
-}) {
+function SkuCard({ sku }: { sku: Sku }) {
+  const { items, addItem, updateQuantity, removeItem } = useCartStore();
+  const cartItem = items.find((i) => i.sku.id === sku.id);
+  const cartQty = cartItem?.quantity ?? 0;
+  const minQty = sku.min_qty ?? 6;
+
   return (
     <div className="card flex flex-col overflow-hidden hover:shadow-md transition-shadow">
-      {/* Image */}
       <div className="w-full h-44 bg-gradient-to-br from-accent/20 to-primary/10 flex items-center justify-center relative overflow-hidden">
         {sku.image_url ? (
-          <img
-            src={sku.image_url}
-            alt={sku.name}
-            className="w-full h-full object-cover"
-          />
+          <img src={sku.image_url} alt={sku.name} className="w-full h-full object-cover" />
         ) : (
           <span className="text-6xl">🍞</span>
         )}
@@ -158,7 +111,6 @@ function SkuCard({
         )}
       </div>
 
-      {/* Body */}
       <div className="p-4 flex flex-col flex-1">
         {sku.is_promo && (
           <span className="text-xs text-accent-dark font-semibold uppercase tracking-wide mb-1">
@@ -174,39 +126,44 @@ function SkuCard({
           </p>
         )}
 
-        {/* Price + CTA */}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-primary/10">
-          <p className="font-heading font-bold text-xl text-primary">
-            S${sku.price.toFixed(2)}
-            {!sku.is_bundle && (
-              <span className="text-xs font-normal text-text-muted ml-1">/set</span>
-            )}
-          </p>
+          <div>
+            <p className="font-heading font-bold text-xl text-primary">
+              S${sku.price.toFixed(2)}
+              {!sku.is_bundle && (
+                <span className="text-xs font-normal text-text-muted ml-1">/set</span>
+              )}
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">Min. {minQty} sets</p>
+          </div>
 
-          <button
-            onClick={onAdd}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-button font-semibold text-sm transition-all active:scale-95 ${
-              justAdded
-                ? "bg-success text-white"
-                : "bg-primary text-white hover:bg-primary-dark"
-            }`}
-          >
-            {justAdded ? (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-                Added!
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add
-              </>
-            )}
-          </button>
+          {cartQty === 0 ? (
+            <button
+              onClick={() => addItem(sku, minQty)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-button font-semibold text-sm bg-primary text-white hover:bg-primary-dark transition-all active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => cartQty <= minQty ? removeItem(sku.id) : updateQuantity(sku.id, cartQty - 1)}
+                className="w-8 h-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary font-bold flex items-center justify-center transition-colors"
+              >
+                −
+              </button>
+              <span className="w-8 text-center font-bold text-text-main">{cartQty}</span>
+              <button
+                onClick={() => updateQuantity(sku.id, cartQty + 1)}
+                className="w-8 h-8 rounded-full bg-primary text-white font-bold flex items-center justify-center hover:bg-primary-dark transition-colors"
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
