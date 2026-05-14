@@ -11,8 +11,10 @@ export default function AuthCallback() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const next = localStorage.getItem("auth_redirect") || "/admin";
+    const raw = localStorage.getItem("auth_redirect") || "/admin";
     localStorage.removeItem("auth_redirect");
+    // Only allow relative paths — prevents open redirect via localStorage manipulation
+    const next = raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("://") ? raw : "/admin";
 
     let done = false;
 
