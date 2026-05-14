@@ -169,7 +169,7 @@ function SkuCard({
           {sku.name}
         </h3>
         {sku.description && (
-          <p className="text-text-muted text-sm flex-1 leading-relaxed line-clamp-2">
+          <p className="text-text-muted text-sm flex-1 leading-relaxed">
             {sku.description}
           </p>
         )}
