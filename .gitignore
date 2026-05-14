@@ -1,0 +1,15 @@
+# Dependencies
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+
+# Supabase local temp
+supabase/.temp/
+
+# Package lock (optional — remove this line if you want to commit it)
+frontend/package-lock.json
+
+# macOS
+.DS_Store
+**/.DS_Store
