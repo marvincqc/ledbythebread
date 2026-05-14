@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
@@ -79,21 +80,23 @@ serve(async (req: Request) => {
       0
     );
 
-    // 5. Check min_item_qty setting (minimum sets per item)
-    const { data: minQtyRow } = await supabase
+    // 5. Check minimum order quantity per item (per-product, with optional store override)
+    const { data: settingsRows } = await supabase
       .from("admin_settings")
-      .select("value")
-      .eq("key", "min_item_qty")
-      .single();
+      .select("key, value")
+      .in("key", ["min_item_qty", "store_min_qty_enabled"]);
 
-    const minItemQty = minQtyRow ? parseInt(minQtyRow.value) : 6;
+    const storeMin = parseInt(settingsRows?.find((s: { key: string }) => s.key === "min_item_qty")?.value ?? "6") || 6;
+    const storeOverride = settingsRows?.find((s: { key: string }) => s.key === "store_min_qty_enabled")?.value === "true";
+
+    const skuIds = payload.items.map((i) => i.sku_id);
+    const { data: skuRows } = await supabase.from("skus").select("id, min_qty").in("id", skuIds);
 
     for (const item of payload.items) {
-      if (item.quantity < minItemQty) {
-        return errorResponse(
-          `Minimum order is ${minItemQty} sets per item. Please update your cart.`,
-          400
-        );
+      const productMin = (skuRows as { id: string; min_qty: number }[] | null)?.find((s) => s.id === item.sku_id)?.min_qty ?? 6;
+      const effectiveMin = storeOverride && storeMin > productMin ? storeMin : productMin;
+      if (item.quantity < effectiveMin) {
+        return errorResponse(`Minimum order for this item is ${effectiveMin} sets. Please update your cart.`, 400);
       }
     }
 

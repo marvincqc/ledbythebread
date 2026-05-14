@@ -1,28 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import type { AdminSetting } from "../../types";
 import { pageCache } from "../../lib/pageCache";
 
-const CORE_SETTINGS: Record<string, { label: string; description: string; unit: string; min: number; max?: number; placeholder: string }> = {
-  min_item_qty: {
-    label: "Minimum Order Quantity",
-    description: "Minimum quantity per item a customer must order.",
-    unit: "sets",
-    min: 1,
-    placeholder: "6",
-  },
-};
-
 export default function AdminSettings() {
-  const [settings, setSettings] = useState<AdminSetting[]>(
-    () => pageCache.get<{ settings: AdminSetting[]; editValues: Record<string, string> }>('admin-settings')?.settings ?? []
-  );
-  const [editValues, setEditValues] = useState<Record<string, string>>(
-    () => pageCache.get<{ settings: AdminSetting[]; editValues: Record<string, string> }>('admin-settings')?.editValues ?? {}
-  );
+  const [minItemQty, setMinItemQty] = useState("6");
+  const [minItemQtySaved, setMinItemQtySaved] = useState("6");
+  const [storeOverrideEnabled, setStoreOverrideEnabled] = useState(false);
+
   const [loading, setLoading] = useState(!pageCache.get('admin-settings'));
-  const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [savingQty, setSavingQty] = useState(false);
+  const [savingToggle, setSavingToggle] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => { fetchSettings(); }, []);
@@ -30,34 +18,48 @@ export default function AdminSettings() {
   async function fetchSettings() {
     if (!pageCache.get('admin-settings')) setLoading(true);
     try {
-      const { data } = await supabase.from("admin_settings").select("*").in("key", Object.keys(CORE_SETTINGS));
+      const { data } = await supabase
+        .from("admin_settings")
+        .select("*")
+        .in("key", ["min_item_qty", "store_min_qty_enabled"]);
       if (data) {
-        const freshSettings = data as AdminSetting[];
-        const vals: Record<string, string> = {};
-        freshSettings.forEach((s) => { vals[s.key] = s.value; });
-        setSettings(freshSettings);
-        setEditValues(vals);
-        pageCache.set('admin-settings', { settings: freshSettings, editValues: vals });
+        const qty = data.find((s) => s.key === "min_item_qty")?.value ?? "6";
+        const override = data.find((s) => s.key === "store_min_qty_enabled")?.value === "true";
+        setMinItemQty(qty);
+        setMinItemQtySaved(qty);
+        setStoreOverrideEnabled(override);
+        pageCache.set('admin-settings', data);
       }
     } finally {
       setLoading(false);
     }
   }
 
-  async function saveSetting(key: string) {
-    const value = editValues[key];
-    if (value === undefined) return;
-    setSaving((p) => ({ ...p, [key]: true }));
+  async function saveMinQty() {
+    setSavingQty(true);
     try {
-      const { error } = await supabase.from("admin_settings").upsert({ key, value }, { onConflict: "key" });
-      if (error) {
-        showMessage("error", error.message);
-      } else {
-        setSettings((prev) => prev.map((s) => s.key === key ? { ...s, value } : s));
-        showMessage("success", `"${CORE_SETTINGS[key]?.label}" saved.`);
+      const { error } = await supabase.from("admin_settings")
+        .upsert({ key: "min_item_qty", value: minItemQty }, { onConflict: "key" });
+      if (error) { showMessage("error", error.message); }
+      else { setMinItemQtySaved(minItemQty); showMessage("success", "Minimum order quantity saved."); }
+    } finally {
+      setSavingQty(false);
+    }
+  }
+
+  async function toggleOverride() {
+    const next = !storeOverrideEnabled;
+    setSavingToggle(true);
+    try {
+      const { error } = await supabase.from("admin_settings")
+        .upsert({ key: "store_min_qty_enabled", value: String(next) }, { onConflict: "key" });
+      if (error) { showMessage("error", error.message); }
+      else {
+        setStoreOverrideEnabled(next);
+        showMessage("success", next ? "Store override enabled." : "Store override disabled.");
       }
     } finally {
-      setSaving((p) => ({ ...p, [key]: false }));
+      setSavingToggle(false);
     }
   }
 
@@ -66,11 +68,7 @@ export default function AdminSettings() {
     setTimeout(() => setMessage(null), 3000);
   }
 
-  // Ensure all core keys are represented even if not in DB yet
-  const rows = Object.keys(CORE_SETTINGS).map((key) => ({
-    key,
-    value: settings.find((s) => s.key === key)?.value ?? CORE_SETTINGS[key].placeholder,
-  }));
+  const qtyDirty = minItemQty !== minItemQtySaved;
 
   return (
     <div className="min-h-screen bg-background">
@@ -80,7 +78,9 @@ export default function AdminSettings() {
       </header>
 
       {message && (
-        <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-card shadow-lg text-white text-sm font-medium ${message.type === "success" ? "bg-success" : "bg-error"}`}>
+        <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-card shadow-lg text-white text-sm font-medium ${
+          message.type === "success" ? "bg-success" : "bg-error"
+        }`}>
           {message.text}
         </div>
       )}
@@ -95,43 +95,65 @@ export default function AdminSettings() {
           </div>
         ) : (
           <div className="space-y-4">
-            {rows.map(({ key, value }) => {
-              const meta = CORE_SETTINGS[key];
-              const current = editValues[key] ?? value;
-              const saved = settings.find((s) => s.key === key)?.value ?? value;
-              const isDirty = current !== saved;
-              return (
-                <div key={key} className="card p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-text-main">{meta.label}</h3>
-                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">{meta.unit}</span>
-                      </div>
-                      <p className="text-text-muted text-xs mt-0.5">{meta.description}</p>
-                    </div>
+
+            {/* Store minimum order quantity */}
+            <div className="card p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-text-main">Store Minimum Order Quantity</h3>
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">sets</span>
                   </div>
-                  <div className="flex gap-3">
-                    <input
-                      type="number"
-                      min={meta.min}
-                      max={meta.max}
-                      placeholder={meta.placeholder}
-                      value={current}
-                      onChange={(e) => setEditValues({ ...editValues, [key]: e.target.value })}
-                      className="input flex-1"
-                    />
-                    <button
-                      onClick={() => saveSetting(key)}
-                      disabled={saving[key] || !isDirty}
-                      className="btn-primary px-5 flex-shrink-0"
-                    >
-                      {saving[key] ? "Saving…" : "Save"}
-                    </button>
-                  </div>
+                  <p className="text-text-muted text-xs mt-0.5">
+                    Overrides per-product minimums only when this value is higher. Requires override to be enabled below.
+                  </p>
                 </div>
-              );
-            })}
+              </div>
+              <div className="flex gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="6"
+                  value={minItemQty}
+                  onChange={(e) => setMinItemQty(e.target.value)}
+                  className="input flex-1"
+                />
+                <button
+                  onClick={saveMinQty}
+                  disabled={savingQty || !qtyDirty}
+                  className="btn-primary px-5 flex-shrink-0"
+                >
+                  {savingQty ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+
+            {/* Store override toggle */}
+            <div className="card p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-text-main">Store Override</h3>
+                  <p className="text-text-muted text-xs mt-0.5">
+                    When active, the store minimum above overrides per-product minimums if it is higher.
+                  </p>
+                </div>
+                <button
+                  onClick={toggleOverride}
+                  disabled={savingToggle}
+                  className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${
+                    storeOverrideEnabled ? "bg-green-500" : "bg-gray-300"
+                  } disabled:opacity-60`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${
+                    storeOverrideEnabled ? "left-6" : "left-0.5"
+                  }`} />
+                </button>
+              </div>
+              <p className={`text-xs font-medium mt-3 ${storeOverrideEnabled ? "text-green-600" : "text-text-muted"}`}>
+                {storeOverrideEnabled ? "Active — store minimum is in effect" : "Inactive — per-product minimums apply"}
+              </p>
+            </div>
+
           </div>
         )}
       </main>

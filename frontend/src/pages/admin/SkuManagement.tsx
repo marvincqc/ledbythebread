@@ -8,6 +8,7 @@ interface SkuFormData {
   name: string;
   description: string;
   price: string;
+  min_qty: string;
   image_url: string;
   is_bundle: boolean;
   is_active: boolean;
@@ -15,7 +16,7 @@ interface SkuFormData {
 }
 
 const defaultForm: SkuFormData = {
-  name: "", description: "", price: "", image_url: "",
+  name: "", description: "", price: "", min_qty: "6", image_url: "",
   is_bundle: false, is_active: true, is_promo: false,
 };
 
@@ -170,6 +171,7 @@ export default function SkuManagement() {
       name: sku.name,
       description: sku.description ?? "",
       price: String(sku.price),
+      min_qty: String(sku.min_qty ?? 6),
       image_url: sku.image_url ?? "",
       is_bundle: sku.is_bundle,
       is_active: sku.is_active,
@@ -199,12 +201,18 @@ export default function SkuManagement() {
       showMessage("error", "Price must be a positive number.");
       return;
     }
+    const min_qty = parseInt(form.min_qty);
+    if (isNaN(min_qty) || min_qty < 1) {
+      showMessage("error", "Minimum order quantity must be at least 1.");
+      return;
+    }
     setModalSaving(true);
     try {
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
       price,
+      min_qty,
       image_url: form.image_url.trim() || null,
       is_bundle: form.is_bundle,
       is_active: form.is_active,
@@ -432,6 +440,13 @@ export default function SkuManagement() {
               <div>
                 <label className="label">Price (S$) *</label>
                 <input type="number" min="0.01" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="input" placeholder="1.50" />
+              </div>
+              <div>
+                <label className="label">Minimum Order Quantity</label>
+                <div className="flex items-center gap-2">
+                  <input type="number" min="1" value={form.min_qty} onChange={(e) => setForm({ ...form, min_qty: e.target.value })} className="input flex-1" placeholder="6" />
+                  <span className="text-sm text-text-muted flex-shrink-0">sets</span>
+                </div>
               </div>
               <div>
                 <label className="label">Image</label>

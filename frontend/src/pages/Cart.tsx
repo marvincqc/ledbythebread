@@ -6,16 +6,27 @@ import { supabase } from "../lib/supabase";
 export default function Cart() {
   const { items, updateQuantity, removeItem, subtotal, totalItems } = useCartStore();
   const navigate = useNavigate();
-  const [minQty, setMinQty] = useState(6);
+  const [storeMin, setStoreMin] = useState(6);
+  const [storeOverride, setStoreOverride] = useState(false);
 
   useEffect(() => {
-    supabase.from("admin_settings").select("value").eq("key", "min_item_qty").single()
-      .then(({ data }) => { if (data) setMinQty(parseInt(data.value) || 6); });
+    supabase.from("admin_settings").select("key, value")
+      .in("key", ["min_item_qty", "store_min_qty_enabled"])
+      .then(({ data }) => {
+        if (!data) return;
+        setStoreMin(parseInt(data.find((s) => s.key === "min_item_qty")?.value ?? "6") || 6);
+        setStoreOverride(data.find((s) => s.key === "store_min_qty_enabled")?.value === "true");
+      });
   }, []);
+
+  const effectiveMin = (sku: { min_qty?: number }) => {
+    const productMin = sku.min_qty ?? 6;
+    return storeOverride && storeMin > productMin ? storeMin : productMin;
+  };
 
   const sub = subtotal();
   const total = totalItems();
-  const belowMinItems = items.filter((i) => i.quantity < minQty);
+  const belowMinItems = items.filter((i) => i.quantity < effectiveMin(i.sku));
   const belowMin = belowMinItems.length > 0;
 
   if (items.length === 0) {
@@ -119,8 +130,7 @@ export default function Cart() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <span>
-              Minimum is {minQty} sets per item.{" "}
-              {belowMinItems.map((i) => i.sku.name).join(", ")} {belowMinItems.length === 1 ? "needs" : "need"} at least {minQty} sets.
+              {belowMinItems.map((i) => `${i.sku.name} (min ${effectiveMin(i.sku)} sets)`).join(", ")} {belowMinItems.length === 1 ? "needs" : "need"} to meet the minimum order quantity.
             </span>
           </div>
         )}

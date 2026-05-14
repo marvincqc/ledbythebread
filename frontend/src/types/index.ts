@@ -25,6 +25,7 @@ export interface Sku {
   description: string | null;
   image_url: string | null;
   price: number;
+  min_qty: number;
   category_id: string | null;
   is_bundle: boolean;
   bundle_components: BundleComponent[] | null;
