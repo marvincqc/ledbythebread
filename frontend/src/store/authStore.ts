@@ -29,10 +29,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         supabase.from("profiles").select("*").eq("id", userId).single(),
         8000
       );
-      if (error) { set({ profile: null, isAdmin: false }); return; }
+      if (error) {
+        // Genuine DB error (no profile row) — not admin
+        set({ profile: null, isAdmin: false });
+        return;
+      }
       set({ profile: data as Profile, isAdmin: data?.role === "admin" });
     } catch {
-      set({ profile: null, isAdmin: false });
+      // Network timeout or connection error — preserve existing auth state
+      // A transient failure does not mean the user stopped being an admin
     }
   },
 
@@ -50,13 +55,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await get().fetchProfile(session.user.id);
       }
     } catch {
-      // timeout or network error — clear loading so the user isn't stuck
+      // timeout — isLoading clears via finally, auth state stays as-is
     } finally {
       set({ isLoading: false });
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
         set({ user: session.user });
         await get().fetchProfile(session.user.id);
       } else if (event === "SIGNED_OUT") {

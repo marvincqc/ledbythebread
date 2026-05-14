@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, Link, useNavigate } from "react-router-dom";
+import { Outlet, Link } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
 import CartPanel from "./CartPanel";
@@ -29,16 +29,7 @@ export default function Layout() {
   const totalItems = useCartStore((s) => s.totalItems());
   const openCart = useCartStore((s) => s.openCart);
   const isCartOpen = useCartStore((s) => s.isOpen);
-  const { user, isAdmin, profile, signOut } = useAuthStore();
-  const navigate = useNavigate();
-
-  const handleSignOut = async () => {
-    await signOut();
-    setMobileMenuOpen(false);
-    navigate("/");
-  };
-
-  const displayName = profile?.full_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "Account";
+  const { user, isAdmin } = useAuthStore();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -61,17 +52,7 @@ export default function Layout() {
               </Link>
             )}
 
-            {user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-text-muted font-medium">Hi, {displayName}</span>
-                <button
-                  onClick={handleSignOut}
-                  className="text-sm text-text-muted hover:text-error border border-primary/20 hover:border-error/30 px-3 py-1.5 rounded-button transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
-            ) : (
+            {!user && (
               <Link
                 to="/admin/login"
                 className="text-text-muted hover:text-primary font-medium transition-colors text-sm"
@@ -115,14 +96,7 @@ export default function Layout() {
                 Admin Panel
               </Link>
             )}
-            {user ? (
-              <>
-                <p className="py-2 text-sm text-text-muted">Signed in as {displayName}</p>
-                <button onClick={handleSignOut} className="block py-2 text-error font-medium w-full text-left">
-                  Sign Out
-                </button>
-              </>
-            ) : (
+            {!user && (
               <Link
                 to="/admin/login"
                 className="block py-2 text-text-muted hover:text-primary font-medium"
