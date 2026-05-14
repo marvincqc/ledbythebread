@@ -2,8 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
-import { supabase } from "../lib/supabase";
-import { callEdgeFunction } from "../lib/supabase";
+import { supabase, callEdgeFunction } from "../lib/supabase";
 import type { DeliverySlot, SlotType } from "../types";
 import { WHATSAPP_LINK } from "../lib/constants";
 
@@ -286,7 +285,6 @@ export default function Checkout() {
       });
       if (fnError || !data?.order_id) {
         setError(fnError ?? "Failed to place order. Please try again.");
-        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
       orderPlaced.current = true;
@@ -296,6 +294,8 @@ export default function Checkout() {
       setLoading(false);
     }
   };
+
+  const addressPreview = buildAddress();
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -554,10 +554,10 @@ export default function Checkout() {
                   className="input"
                 />
               </div>
-              {buildAddress() && (
+              {addressPreview && (
                 <p className="text-text-muted text-xs">
                   <span className="font-medium text-text-main">Full address: </span>
-                  {buildAddress()}
+                  {addressPreview}
                 </p>
               )}
             </div>
