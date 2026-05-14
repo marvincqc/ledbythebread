@@ -48,6 +48,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { items, subtotal, clearCart } = useCartStore();
   const { user, profile } = useAuthStore();
+  const orderPlaced = useRef(false);
 
   const [slots, setSlots] = useState<DeliverySlot[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
@@ -135,7 +136,7 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
-    if (items.length === 0) navigate("/", { replace: true });
+    if (items.length === 0 && !orderPlaced.current) navigate("/", { replace: true });
   }, [items, navigate]);
 
   // Auto-lookup when postal code reaches 6 digits
@@ -287,6 +288,7 @@ export default function Checkout() {
         setError(fnError ?? "Failed to place order. Please try again.");
         return;
       }
+      orderPlaced.current = true;
       clearCart();
       navigate(`/order/${data.order_id}`);
     } finally {
