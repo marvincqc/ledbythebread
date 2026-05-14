@@ -141,7 +141,7 @@ export const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   cancelled:  ALL_STATUSES.filter((s) => s !== "cancelled"),
 };
 
-export const STATUS_ACTION_LABELS: Record<string, string> = {
+export const STATUS_ACTION_LABELS: Record<OrderStatus, string> = {
   pending:    "Mark Pending",
   confirmed:  "Confirm Payment",
   preparing:  "Start Preparing",

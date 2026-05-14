@@ -108,7 +108,7 @@ export default function SlotManagement() {
     }
 
     // Sync current_orders in DB if stale, update local state with real counts
-    const syncUpdates: Promise<unknown>[] = [];
+    const syncUpdates: PromiseLike<unknown>[] = [];
     const synced = existing.map((slot) => {
       const key = `${slot.delivery_date}|${slot.slot_type}`;
       const realCount = orderCounts[key] ?? 0;

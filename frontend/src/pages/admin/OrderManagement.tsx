@@ -138,7 +138,7 @@ export default function OrderManagement() {
     try {
       const { data } = await supabase.from("order_items").select("*, sku:skus(*)").eq("order_id", order.id);
       if (data) {
-        const withItems = { ...order, order_items: data };
+        const withItems = { ...order, order_items: data } as unknown as Order;
         setSelectedOrder(withItems);
         setOrders((prev) => prev.map((o) => o.id === order.id ? withItems : o));
       }
@@ -359,7 +359,7 @@ export default function OrderManagement() {
               <div className="card p-4">
                 <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">Change Status</p>
                 <div className="space-y-1.5">
-                  {ALL_STATUSES.filter((s) => s !== selectedOrder.status).map((s) => (
+                  {ALL_STATUSES.filter((s) => s !== selectedOrder.status).map((s: OrderStatus) => (
                     <button
                       key={s}
                       onClick={() => updateStatus(selectedOrder, s)}
@@ -377,7 +377,7 @@ export default function OrderManagement() {
               </div>
 
               {/* Payment proof */}
-              {selectedOrder.metadata?.payment_proof_url && (
+              {!!selectedOrder.metadata?.payment_proof_url && (
                 <div className="card p-4">
                   <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Payment Screenshot</p>
                   <button
