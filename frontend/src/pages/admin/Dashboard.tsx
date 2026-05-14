@@ -64,7 +64,7 @@ export default function AdminDashboard() {
       }
     }
 
-    loadDashboard(!cached);
+    loadDashboard(!!cached);
 
     const channel = supabase
       .channel("dashboard-orders")
