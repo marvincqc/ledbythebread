@@ -57,6 +57,7 @@ export default function Checkout() {
   // Address state
   const [postalCode, setPostalCode] = useState("");
   const [unitNo, setUnitNo] = useState("");
+  const [buildingName, setBuildingName] = useState("");
   const [addressLookup, setAddressLookup] = useState<"idle" | "loading" | "found" | "error">("idle");
   const [addressResult, setAddressResult] = useState<OneMapResult | null>(null);
   const [addressError, setAddressError] = useState("");
@@ -224,9 +225,9 @@ export default function Checkout() {
   // Compose final address string
   const buildAddress = () => {
     if (!addressResult) return "";
-    const building = addressResult.BUILDING !== "NIL" ? ` ${addressResult.BUILDING}` : "";
     const unit = unitNo.trim() ? ` #${unitNo.trim().replace(/^#/, "")}` : "";
-    return `${addressResult.BLK_NO} ${addressResult.ROAD_NAME}${building}${unit} Singapore ${addressResult.POSTAL}`;
+    const bldg = buildingName.trim() ? ` ${buildingName.trim()}` : "";
+    return `${addressResult.BLK_NO} ${addressResult.ROAD_NAME}${unit}${bldg} Singapore ${addressResult.POSTAL}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -240,6 +241,11 @@ export default function Checkout() {
 
     if (addressLookup !== "found" || !addressResult) {
       setError("Please enter a valid Singapore postal code.");
+      return;
+    }
+
+    if (!unitNo.trim()) {
+      setError("Please enter your unit number.");
       return;
     }
 
@@ -512,33 +518,41 @@ export default function Checkout() {
           {addressLookup === "found" && addressResult && (
             <div className="mb-4 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
               <p className="text-xs text-text-muted font-medium uppercase tracking-wide mb-1">Address found</p>
-              <p className="text-text-main font-medium">
-                {addressResult.BLK_NO} {addressResult.ROAD_NAME}
-                {addressResult.BUILDING !== "NIL" && (
-                  <span className="text-text-muted"> · {addressResult.BUILDING}</span>
-                )}
-              </p>
+              <p className="text-text-main font-medium">{addressResult.BLK_NO} {addressResult.ROAD_NAME}</p>
               <p className="text-text-muted text-sm">Singapore {addressResult.POSTAL}</p>
             </div>
           )}
 
-          {/* Step 3: Unit number */}
+          {/* Step 3: Unit number + building name */}
           {addressLookup === "found" && (
-            <div>
-              <label className="label" htmlFor="unit">
-                Unit Number <span className="text-text-muted font-normal">(optional)</span>
-              </label>
-              <input
-                id="unit"
-                type="text"
-                value={unitNo}
-                onChange={(e) => setUnitNo(e.target.value)}
-                placeholder="#05-10"
-                className="input"
-              />
-              {/* Preview */}
+            <div className="space-y-4">
+              <div>
+                <label className="label" htmlFor="unit">Unit Number</label>
+                <input
+                  id="unit"
+                  type="text"
+                  value={unitNo}
+                  onChange={(e) => setUnitNo(e.target.value)}
+                  placeholder="#05-10"
+                  className="input"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="building">
+                  Building Name <span className="text-text-muted font-normal">(optional)</span>
+                </label>
+                <input
+                  id="building"
+                  type="text"
+                  value={buildingName}
+                  onChange={(e) => setBuildingName(e.target.value)}
+                  placeholder="e.g. Sunshine Tower"
+                  className="input"
+                />
+              </div>
               {buildAddress() && (
-                <p className="text-text-muted text-xs mt-2">
+                <p className="text-text-muted text-xs">
                   <span className="font-medium text-text-main">Full address: </span>
                   {buildAddress()}
                 </p>
