@@ -196,13 +196,9 @@ export default function Checkout() {
       return;
     }
 
-    // Validate minimum sets per item
-    const { data: minQtyRow } = await supabase
-      .from("admin_settings").select("value").eq("key", "min_item_qty").single();
-    const minQty = minQtyRow ? parseInt(minQtyRow.value) : 6;
-    const belowMin = items.find((i) => i.quantity < minQty);
-    if (belowMin) {
-      setError(`Minimum is ${minQty} sets per item. "${belowMin.sku.name}" has ${belowMin.quantity}.`);
+    const belowMinQty = items.find((i) => i.quantity < (i.sku.min_qty ?? 1));
+    if (belowMinQty) {
+      setError(`"${belowMinQty.sku.name}" requires a minimum of ${belowMinQty.sku.min_qty ?? 1} sets.`);
       return;
     }
 

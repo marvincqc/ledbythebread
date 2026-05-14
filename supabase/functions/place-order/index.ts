@@ -80,23 +80,28 @@ serve(async (req: Request) => {
       0
     );
 
-    // 5. Check minimum order quantity per item (per-product, with optional store override)
-    const { data: settingsRows } = await supabase
-      .from("admin_settings")
-      .select("key, value")
-      .in("key", ["min_item_qty", "store_min_qty_enabled"]);
-
-    const storeMin = parseInt(settingsRows?.find((s: { key: string }) => s.key === "min_item_qty")?.value ?? "6") || 6;
-    const storeOverride = settingsRows?.find((s: { key: string }) => s.key === "store_min_qty_enabled")?.value === "true";
-
+    // 5. Check per-product minimum quantity
     const skuIds = payload.items.map((i) => i.sku_id);
     const { data: skuRows } = await supabase.from("skus").select("id, min_qty").in("id", skuIds);
 
     for (const item of payload.items) {
-      const productMin = (skuRows as { id: string; min_qty: number }[] | null)?.find((s) => s.id === item.sku_id)?.min_qty ?? 6;
-      const effectiveMin = storeOverride && storeMin > productMin ? storeMin : productMin;
-      if (item.quantity < effectiveMin) {
-        return errorResponse(`Minimum order for this item is ${effectiveMin} sets. Please update your cart.`, 400);
+      const productMin = (skuRows as { id: string; min_qty: number }[] | null)?.find((s) => s.id === item.sku_id)?.min_qty ?? 1;
+      if (item.quantity < productMin) {
+        return errorResponse(`Minimum order for this item is ${productMin} sets.`, 400);
+      }
+    }
+
+    // 6. Check store minimum order value
+    const { data: settingsRows } = await supabase
+      .from("admin_settings")
+      .select("key, value")
+      .in("key", ["store_min_order_value", "store_min_order_value_enabled"]);
+
+    const minOrderValueEnabled = settingsRows?.find((s: { key: string }) => s.key === "store_min_order_value_enabled")?.value === "true";
+    if (minOrderValueEnabled) {
+      const minOrderValue = parseFloat(settingsRows?.find((s: { key: string }) => s.key === "store_min_order_value")?.value ?? "0") || 0;
+      if (subtotal < minOrderValue) {
+        return errorResponse(`Minimum order value is S$${minOrderValue.toFixed(2)}.`, 400);
       }
     }
 

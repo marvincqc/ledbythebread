@@ -7,28 +7,24 @@ export default function CartPanel() {
   const { items, updateQuantity, removeItem, closeCart, subtotal, totalItems } =
     useCartStore();
   const navigate = useNavigate();
-  const [storeMin, setStoreMin] = useState(6);
-  const [storeOverride, setStoreOverride] = useState(false);
+  const [minOrderValue, setMinOrderValue] = useState(0);
+  const [minOrderValueEnabled, setMinOrderValueEnabled] = useState(false);
 
   useEffect(() => {
     supabase.from("admin_settings").select("key, value")
-      .in("key", ["min_item_qty", "store_min_qty_enabled"])
+      .in("key", ["store_min_order_value", "store_min_order_value_enabled"])
       .then(({ data }) => {
         if (!data) return;
-        setStoreMin(parseInt(data.find((s) => s.key === "min_item_qty")?.value ?? "6") || 6);
-        setStoreOverride(data.find((s) => s.key === "store_min_qty_enabled")?.value === "true");
+        setMinOrderValue(parseFloat(data.find((s) => s.key === "store_min_order_value")?.value ?? "0") || 0);
+        setMinOrderValueEnabled(data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true");
       });
   }, []);
 
-  const effectiveMin = (sku: { min_qty?: number }) => {
-    const productMin = sku.min_qty ?? 6;
-    return storeOverride && storeMin > productMin ? storeMin : productMin;
-  };
-
   const sub = subtotal();
   const total = totalItems();
-  const belowMinItems = items.filter((i) => i.quantity < effectiveMin(i.sku));
+  const belowMinItems = items.filter((i) => i.quantity < (i.sku.min_qty ?? 1));
   const belowMin = belowMinItems.length > 0;
+  const belowMinValue = minOrderValueEnabled && sub < minOrderValue;
 
   const handleCheckout = () => {
     closeCart();
@@ -161,10 +157,14 @@ export default function CartPanel() {
         {/* Footer */}
         {items.length > 0 && (
           <div className="border-t border-primary/10 px-5 py-4 space-y-3">
-            {/* Minimum qty warning */}
             {belowMin && (
               <div className="bg-error/10 border border-error/20 rounded-lg px-3 py-2 text-error text-sm">
-                {belowMinItems.map((i) => `${i.sku.name} (min ${effectiveMin(i.sku)} sets)`).join(", ")} {belowMinItems.length === 1 ? "needs" : "need"} to meet the minimum.
+                {belowMinItems.map((i) => `${i.sku.name} (min ${i.sku.min_qty ?? 1} sets)`).join(", ")} {belowMinItems.length === 1 ? "needs" : "need"} to meet the minimum.
+              </div>
+            )}
+            {belowMinValue && (
+              <div className="bg-error/10 border border-error/20 rounded-lg px-3 py-2 text-error text-sm">
+                Minimum order value is S${minOrderValue.toFixed(2)}.
               </div>
             )}
 
@@ -178,7 +178,7 @@ export default function CartPanel() {
 
             <button
               onClick={handleCheckout}
-              disabled={belowMin}
+              disabled={belowMin || belowMinValue}
               className="w-full btn-primary py-3 text-base"
             >
               Proceed to Checkout

@@ -6,28 +6,24 @@ import { supabase } from "../lib/supabase";
 export default function Cart() {
   const { items, updateQuantity, removeItem, subtotal, totalItems } = useCartStore();
   const navigate = useNavigate();
-  const [storeMin, setStoreMin] = useState(6);
-  const [storeOverride, setStoreOverride] = useState(false);
+  const [minOrderValue, setMinOrderValue] = useState(0);
+  const [minOrderValueEnabled, setMinOrderValueEnabled] = useState(false);
 
   useEffect(() => {
     supabase.from("admin_settings").select("key, value")
-      .in("key", ["min_item_qty", "store_min_qty_enabled"])
+      .in("key", ["store_min_order_value", "store_min_order_value_enabled"])
       .then(({ data }) => {
         if (!data) return;
-        setStoreMin(parseInt(data.find((s) => s.key === "min_item_qty")?.value ?? "6") || 6);
-        setStoreOverride(data.find((s) => s.key === "store_min_qty_enabled")?.value === "true");
+        setMinOrderValue(parseFloat(data.find((s) => s.key === "store_min_order_value")?.value ?? "0") || 0);
+        setMinOrderValueEnabled(data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true");
       });
   }, []);
 
-  const effectiveMin = (sku: { min_qty?: number }) => {
-    const productMin = sku.min_qty ?? 6;
-    return storeOverride && storeMin > productMin ? storeMin : productMin;
-  };
-
   const sub = subtotal();
   const total = totalItems();
-  const belowMinItems = items.filter((i) => i.quantity < effectiveMin(i.sku));
+  const belowMinItems = items.filter((i) => i.quantity < (i.sku.min_qty ?? 1));
   const belowMin = belowMinItems.length > 0;
+  const belowMinValue = minOrderValueEnabled && sub < minOrderValue;
 
   if (items.length === 0) {
     return (
@@ -123,15 +119,22 @@ export default function Cart() {
 
       {/* Summary card */}
       <div className="card p-5 space-y-3">
-        {/* Min order warning */}
         {belowMin && (
           <div className="flex items-start gap-2 bg-error/10 border border-error/20 rounded-lg px-3 py-2.5 text-error text-sm">
             <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <span>
-              {belowMinItems.map((i) => `${i.sku.name} (min ${effectiveMin(i.sku)} sets)`).join(", ")} {belowMinItems.length === 1 ? "needs" : "need"} to meet the minimum order quantity.
+              {belowMinItems.map((i) => `${i.sku.name} (min ${i.sku.min_qty ?? 1} sets)`).join(", ")} {belowMinItems.length === 1 ? "needs" : "need"} to meet the minimum order quantity.
             </span>
+          </div>
+        )}
+        {belowMinValue && (
+          <div className="flex items-start gap-2 bg-error/10 border border-error/20 rounded-lg px-3 py-2.5 text-error text-sm">
+            <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>Minimum order value is S${minOrderValue.toFixed(2)}. Add more to continue.</span>
           </div>
         )}
 
@@ -146,7 +149,7 @@ export default function Cart() {
 
         <button
           onClick={() => navigate("/checkout")}
-          disabled={belowMin}
+          disabled={belowMin || belowMinValue}
           className="w-full btn-primary py-3 text-base"
         >
           Proceed to Checkout

@@ -94,7 +94,7 @@ export default function AdminDashboard() {
     { to: "/admin/orders", label: "Order Management",  icon: "📋", desc: "View and update order statuses" },
     { to: "/admin/slots",  label: "Slot Management",   icon: "📅", desc: "Manage delivery slots and availability" },
     { to: "/admin/skus",   label: "Product Management",icon: "🍞", desc: "Add, edit, and manage pandesal SKUs" },
-    { to: "/admin/settings",label: "Settings",         icon: "⚙️", desc: "Configure min order quantity" },
+    { to: "/admin/settings",label: "Store Settings",    icon: "⚙️", desc: "Configure minimum order value and delivery" },
   ];
 
   return (

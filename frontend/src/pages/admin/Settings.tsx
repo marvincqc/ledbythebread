@@ -4,12 +4,12 @@ import { supabase } from "../../lib/supabase";
 import { pageCache } from "../../lib/pageCache";
 
 export default function AdminSettings() {
-  const [minItemQty, setMinItemQty] = useState("6");
-  const [minItemQtySaved, setMinItemQtySaved] = useState("6");
-  const [storeOverrideEnabled, setStoreOverrideEnabled] = useState(false);
+  const [minOrderValue, setMinOrderValue] = useState("0.00");
+  const [minOrderValueSaved, setMinOrderValueSaved] = useState("0.00");
+  const [minOrderValueEnabled, setMinOrderValueEnabled] = useState(false);
 
   const [loading, setLoading] = useState(!pageCache.get('admin-settings'));
-  const [savingQty, setSavingQty] = useState(false);
+  const [savingValue, setSavingValue] = useState(false);
   const [savingToggle, setSavingToggle] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -20,14 +20,14 @@ export default function AdminSettings() {
     try {
       const { data } = await supabase
         .from("admin_settings")
-        .select("*")
-        .in("key", ["min_item_qty", "store_min_qty_enabled"]);
+        .select("key, value")
+        .in("key", ["store_min_order_value", "store_min_order_value_enabled"]);
       if (data) {
-        const qty = data.find((s) => s.key === "min_item_qty")?.value ?? "6";
-        const override = data.find((s) => s.key === "store_min_qty_enabled")?.value === "true";
-        setMinItemQty(qty);
-        setMinItemQtySaved(qty);
-        setStoreOverrideEnabled(override);
+        const val = data.find((s) => s.key === "store_min_order_value")?.value ?? "0.00";
+        const enabled = data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true";
+        setMinOrderValue(val);
+        setMinOrderValueSaved(val);
+        setMinOrderValueEnabled(enabled);
         pageCache.set('admin-settings', data);
       }
     } finally {
@@ -35,28 +35,34 @@ export default function AdminSettings() {
     }
   }
 
-  async function saveMinQty() {
-    setSavingQty(true);
+  async function saveMinOrderValue() {
+    const parsed = parseFloat(minOrderValue);
+    if (isNaN(parsed) || parsed < 0) {
+      showMessage("error", "Enter a valid dollar amount.");
+      return;
+    }
+    const formatted = parsed.toFixed(2);
+    setSavingValue(true);
     try {
       const { error } = await supabase.from("admin_settings")
-        .upsert({ key: "min_item_qty", value: minItemQty }, { onConflict: "key" });
+        .upsert({ key: "store_min_order_value", value: formatted }, { onConflict: "key" });
       if (error) { showMessage("error", error.message); }
-      else { setMinItemQtySaved(minItemQty); showMessage("success", "Minimum order quantity saved."); }
+      else { setMinOrderValue(formatted); setMinOrderValueSaved(formatted); showMessage("success", "Minimum order value saved."); }
     } finally {
-      setSavingQty(false);
+      setSavingValue(false);
     }
   }
 
-  async function toggleOverride() {
-    const next = !storeOverrideEnabled;
+  async function toggleMinOrderValue() {
+    const next = !minOrderValueEnabled;
     setSavingToggle(true);
     try {
       const { error } = await supabase.from("admin_settings")
-        .upsert({ key: "store_min_qty_enabled", value: String(next) }, { onConflict: "key" });
+        .upsert({ key: "store_min_order_value_enabled", value: String(next) }, { onConflict: "key" });
       if (error) { showMessage("error", error.message); }
       else {
-        setStoreOverrideEnabled(next);
-        showMessage("success", next ? "Store override enabled." : "Store override disabled.");
+        setMinOrderValueEnabled(next);
+        showMessage("success", next ? "Minimum order value activated." : "Minimum order value deactivated.");
       }
     } finally {
       setSavingToggle(false);
@@ -68,13 +74,13 @@ export default function AdminSettings() {
     setTimeout(() => setMessage(null), 3000);
   }
 
-  const qtyDirty = minItemQty !== minItemQtySaved;
+  const isDirty = minOrderValue !== minOrderValueSaved;
 
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-primary text-white px-6 py-4 flex items-center gap-4">
         <Link to="/admin" className="text-white/70 hover:text-white">← Dashboard</Link>
-        <h1 className="font-heading text-xl font-bold">Settings</h1>
+        <h1 className="font-heading text-xl font-bold">Store Settings</h1>
       </header>
 
       {message && (
@@ -96,61 +102,60 @@ export default function AdminSettings() {
         ) : (
           <div className="space-y-4">
 
-            {/* Store minimum order quantity */}
             <div className="card p-5">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-text-main">Store Minimum Order Quantity</h3>
-                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">sets</span>
-                  </div>
-                  <p className="text-text-muted text-xs mt-0.5">
-                    Overrides per-product minimums only when this value is higher. Requires override to be enabled below.
-                  </p>
-                </div>
+              <div className="mb-3">
+                <h3 className="font-semibold text-text-main">Store Minimum Order Value</h3>
+                <p className="text-text-muted text-xs mt-0.5">
+                  Minimum cart total required to place an order. Only enforced when active.
+                </p>
               </div>
               <div className="flex gap-3">
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="6"
-                  value={minItemQty}
-                  onChange={(e) => setMinItemQty(e.target.value)}
-                  className="input flex-1"
-                />
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm font-medium">S$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={minOrderValue}
+                    onChange={(e) => setMinOrderValue(e.target.value)}
+                    className="input pl-9"
+                  />
+                </div>
                 <button
-                  onClick={saveMinQty}
-                  disabled={savingQty || !qtyDirty}
+                  onClick={saveMinOrderValue}
+                  disabled={savingValue || !isDirty}
                   className="btn-primary px-5 flex-shrink-0"
                 >
-                  {savingQty ? "Saving…" : "Save"}
+                  {savingValue ? "Saving…" : "Save"}
                 </button>
               </div>
             </div>
 
-            {/* Store override toggle */}
             <div className="card p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-text-main">Store Override</h3>
+                  <h3 className="font-semibold text-text-main">Activate Minimum Order Value</h3>
                   <p className="text-text-muted text-xs mt-0.5">
-                    When active, the store minimum above overrides per-product minimums if it is higher.
+                    When active, customers cannot check out below the minimum order value above.
                   </p>
                 </div>
                 <button
-                  onClick={toggleOverride}
+                  onClick={toggleMinOrderValue}
                   disabled={savingToggle}
                   className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${
-                    storeOverrideEnabled ? "bg-green-500" : "bg-gray-300"
+                    minOrderValueEnabled ? "bg-green-500" : "bg-gray-300"
                   } disabled:opacity-60`}
                 >
                   <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${
-                    storeOverrideEnabled ? "left-6" : "left-0.5"
+                    minOrderValueEnabled ? "left-6" : "left-0.5"
                   }`} />
                 </button>
               </div>
-              <p className={`text-xs font-medium mt-3 ${storeOverrideEnabled ? "text-green-600" : "text-text-muted"}`}>
-                {storeOverrideEnabled ? "Active — store minimum is in effect" : "Inactive — per-product minimums apply"}
+              <p className={`text-xs font-medium mt-3 ${minOrderValueEnabled ? "text-green-600" : "text-text-muted"}`}>
+                {minOrderValueEnabled
+                  ? `Active — minimum order value of S$${parseFloat(minOrderValueSaved).toFixed(2)} is enforced`
+                  : "Inactive — no minimum order value"}
               </p>
             </div>
 
