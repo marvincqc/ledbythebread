@@ -59,7 +59,6 @@ export default function SlotManagement() {
   const [savedSlots, setSavedSlots] = useState<DeliverySlot[]>(() => pageCache.get<DeliverySlot[]>('admin-slots') ?? []);
   const [loading, setLoading] = useState(!pageCache.get('admin-slots'));
   const [weeksAhead, setWeeksAhead] = useState(2);
-  const [savingWeeks, setSavingWeeks] = useState(false);
   const [editingCapacity, setEditingCapacity] = useState<{ id: string; value: string } | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const capacityInputRef = useRef<HTMLInputElement>(null);
@@ -160,18 +159,6 @@ export default function SlotManagement() {
     pageCache.set('admin-slots', synced);
   }
 
-  async function updateWeeksAhead(newWeeks: number) {
-    if (newWeeks < 1 || newWeeks > 12) return;
-    setWeeksAhead(newWeeks);
-    setSavingWeeks(true);
-    try {
-      await supabase.from("admin_settings").upsert({ key: "max_weeks_out", value: String(newWeeks) }, { onConflict: "key" });
-      await loadAndGenerate(newWeeks);
-    } finally {
-      setSavingWeeks(false);
-    }
-  }
-
   function toggleSlot(slot: DeliverySlot) {
     setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, is_open: !slot.is_open } : s));
   }
@@ -248,34 +235,13 @@ export default function SlotManagement() {
         </div>
       )}
 
-      {/* Config + stats bar */}
-      <div className="border-b border-primary/10 bg-white px-4 py-3">
-        <div className="max-w-2xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          {/* Weeks ahead control */}
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-text-muted font-medium">Customers can pre-order up to</span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => updateWeeksAhead(weeksAhead - 1)}
-                disabled={weeksAhead <= 1 || savingWeeks}
-                className="w-7 h-7 rounded-full bg-primary/10 hover:bg-primary/20 text-primary font-bold flex items-center justify-center disabled:opacity-40 transition-colors"
-              >−</button>
-              <span className="w-8 text-center font-heading font-bold text-primary text-lg">{weeksAhead}</span>
-              <button
-                onClick={() => updateWeeksAhead(weeksAhead + 1)}
-                disabled={weeksAhead >= 12 || savingWeeks}
-                className="w-7 h-7 rounded-full bg-primary/10 hover:bg-primary/20 text-primary font-bold flex items-center justify-center disabled:opacity-40 transition-colors"
-              >+</button>
-            </div>
-            <span className="text-sm text-text-muted font-medium">weeks ahead</span>
-            {savingWeeks && <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
-          </div>
-          {/* Stats */}
-          <div className="flex items-center gap-4 text-xs text-text-muted">
-            {fullCount > 0 && <span><span className="font-semibold text-orange-600">{fullCount}</span> slot{fullCount !== 1 ? "s" : ""} full</span>}
+      {fullCount > 0 && (
+        <div className="border-b border-primary/10 bg-white px-4 py-2.5">
+          <div className="max-w-2xl mx-auto text-xs text-text-muted">
+            <span className="font-semibold text-orange-600">{fullCount}</span> slot{fullCount !== 1 ? "s" : ""} fully booked
           </div>
         </div>
-      </div>
+      )}
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {loading ? (
