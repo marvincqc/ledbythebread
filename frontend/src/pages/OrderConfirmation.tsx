@@ -124,6 +124,16 @@ export default function OrderConfirmation() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Polling fallback — real-time subscriptions are unreliable for anon users
+  useEffect(() => {
+    if (!id) return;
+    const interval = setInterval(() => {
+      supabase.from("order_messages").select("*").eq("order_id", id).order("created_at")
+        .then(({ data }) => { if (data) setMessages(data as OrderMessage[]); });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [id]);
+
   async function sendMessage() {
     if (!newMsg.trim() || !id) return;
     setSendingMsg(true);

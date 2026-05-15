@@ -46,37 +46,43 @@ export default function OrderManagement() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const [unreadOrderIds, setUnreadOrderIds] = useState<Set<string>>(new Set());
+
   // Messages
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [newMsg, setNewMsg] = useState("");
   const [sendingMsg, setSendingMsg] = useState(false);
   const msgChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const msgPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const closeLightbox = useCallback(() => setLightboxUrl(null), []);
 
-  // Fetch messages + subscribe when selected order changes
+  // Fetch messages + subscribe + poll when selected order changes
   useEffect(() => {
     setMessages([]);
     setNewMsg("");
-    if (msgChannelRef.current) {
-      supabase.removeChannel(msgChannelRef.current);
-      msgChannelRef.current = null;
-    }
+    if (msgChannelRef.current) { supabase.removeChannel(msgChannelRef.current); msgChannelRef.current = null; }
+    if (msgPollRef.current) { clearInterval(msgPollRef.current); msgPollRef.current = null; }
     if (!selectedOrder) return;
 
-    supabase.from("order_messages").select("*").eq("order_id", selectedOrder.id).order("created_at")
-      .then(({ data }) => setMessages((data ?? []) as OrderMessage[]));
+    const orderId = selectedOrder.id;
 
-    // Mark all unread customer messages as read
+    function refreshMessages() {
+      supabase.from("order_messages").select("*").eq("order_id", orderId).order("created_at")
+        .then(({ data }) => { if (data) setMessages(data as OrderMessage[]); });
+    }
+
+    refreshMessages();
+
     supabase.from("order_messages")
       .update({ read_at: new Date().toISOString() })
-      .eq("order_id", selectedOrder.id).eq("sender", "customer").is("read_at", null)
+      .eq("order_id", orderId).eq("sender", "customer").is("read_at", null)
       .then(() => {});
 
     msgChannelRef.current = supabase
-      .channel(`admin-msg-${selectedOrder.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_messages", filter: `order_id=eq.${selectedOrder.id}` },
+      .channel(`admin-msg-${orderId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_messages", filter: `order_id=eq.${orderId}` },
         (payload) => {
           setMessages((prev) => [...prev, payload.new as OrderMessage]);
           if ((payload.new as OrderMessage).sender === "customer") {
@@ -86,11 +92,12 @@ export default function OrderManagement() {
       )
       .subscribe();
 
+    // Polling fallback — real-time is unreliable for some clients
+    msgPollRef.current = setInterval(refreshMessages, 5000);
+
     return () => {
-      if (msgChannelRef.current) {
-        supabase.removeChannel(msgChannelRef.current);
-        msgChannelRef.current = null;
-      }
+      if (msgPollRef.current) { clearInterval(msgPollRef.current); msgPollRef.current = null; }
+      if (msgChannelRef.current) { supabase.removeChannel(msgChannelRef.current); msgChannelRef.current = null; }
     };
   }, [selectedOrder?.id]);
 
@@ -124,8 +131,14 @@ export default function OrderManagement() {
       if (filters.dateTo) query = query.lte("delivery_date", filters.dateTo);
       if (filters.slot) query = query.eq("slot_type", filters.slot as SlotType);
       if (filters.status) query = query.eq("status", filters.status);
-      const { data } = await query;
-      if (data) { setOrders(data as Order[]); pageCache.set('admin-orders', data); }
+      const [ordersRes, unreadRes] = await Promise.all([
+        query,
+        supabase.from("order_messages").select("order_id").eq("sender", "customer").is("read_at", null),
+      ]);
+      if (ordersRes.data) { setOrders(ordersRes.data as Order[]); pageCache.set('admin-orders', ordersRes.data); }
+      if (unreadRes.data) {
+        setUnreadOrderIds(new Set((unreadRes.data as { order_id: string }[]).map((r) => r.order_id)));
+      }
     } finally {
       setLoading(false);
     }
@@ -133,6 +146,7 @@ export default function OrderManagement() {
 
   async function selectOrder(order: Order) {
     setSelectedOrder(order);
+    setUnreadOrderIds((prev) => { const next = new Set(prev); next.delete(order.id); return next; });
     if (order.order_items) return;
     setLoadingDetail(true);
     try {
@@ -284,7 +298,12 @@ export default function OrderManagement() {
                             <span className="font-mono text-xs font-bold text-text-main">{formatOrderId(order.created_at)}</span>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="font-medium text-text-main">{order.guest_info?.name ?? "—"}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-text-main">{order.guest_info?.name ?? "—"}</span>
+                              {unreadOrderIds.has(order.id) && (
+                                <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" title="Unread message" />
+                              )}
+                            </div>
                             <div className="text-xs text-text-muted">{order.guest_info?.phone}</div>
                           </td>
                           <td className="px-4 py-3">
