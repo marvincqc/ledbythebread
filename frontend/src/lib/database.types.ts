@@ -56,6 +56,7 @@ export type Database = {
           is_open: boolean
           max_orders: number
           slot_type: string
+          zone_id: string | null
         }
         Insert: {
           current_orders?: number
@@ -65,6 +66,7 @@ export type Database = {
           is_open?: boolean
           max_orders?: number
           slot_type: string
+          zone_id?: string | null
         }
         Update: {
           current_orders?: number
@@ -74,6 +76,42 @@ export type Database = {
           is_open?: boolean
           max_orders?: number
           slot_type?: string
+          zone_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_slots_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_zones: {
+        Row: {
+          center_lat: number
+          center_lng: number
+          created_at: string | null
+          id: string
+          name: string
+          radius_km: number
+        }
+        Insert: {
+          center_lat: number
+          center_lng: number
+          created_at?: string | null
+          id?: string
+          name: string
+          radius_km?: number
+        }
+        Update: {
+          center_lat?: number
+          center_lng?: number
+          created_at?: string | null
+          id?: string
+          name?: string
+          radius_km?: number
         }
         Relationships: []
       }

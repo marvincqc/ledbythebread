@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
-import { supabase, untypedSupabase, callEdgeFunction } from "../lib/supabase";
+import { supabase, callEdgeFunction } from "../lib/supabase";
 import type { DeliverySlot, SlotType } from "../types";
 import { WHATSAPP_LINK } from "../lib/constants";
 import { getNextDays, haversineKm } from "../lib/utils";
@@ -161,7 +161,7 @@ export default function Checkout() {
   useEffect(() => {
     async function fetchSlots() {
       setSlotsLoading(true);
-      const { data } = await untypedSupabase
+      const { data } = await supabase
         .from("delivery_slots")
         .select("*, zone:delivery_zones(*)")
         .eq("is_open", true)

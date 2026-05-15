@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase, untypedSupabase } from "../../lib/supabase";
+import { supabase } from "../../lib/supabase";
 import { pageCache } from "../../lib/pageCache";
 import type { DeliveryZone } from "../../types";
 
@@ -70,7 +70,7 @@ export default function AdminSettings() {
   async function fetchZones() {
     setZonesLoading(true);
     try {
-      const { data } = await untypedSupabase.from("delivery_zones").select("*").order("created_at");
+      const { data } = await supabase.from("delivery_zones").select("*").order("created_at");
       if (data) {
         setZones(data as DeliveryZone[]);
         pageCache.set("admin-zones", data);
@@ -133,12 +133,12 @@ export default function AdminSettings() {
     try {
       const payload = { name: zoneForm.name.trim(), center_lat: zoneForm.lat, center_lng: zoneForm.lng, radius_km: radius };
       if (zoneModal.editing) {
-        const { error } = await untypedSupabase.from("delivery_zones").update(payload).eq("id", zoneModal.editing.id);
+        const { error } = await supabase.from("delivery_zones").update(payload).eq("id", zoneModal.editing.id);
         if (error) { showMessage("error", error.message); return; }
         setZones((prev) => prev.map((z) => z.id === zoneModal.editing!.id ? { ...z, ...payload } : z));
         showMessage("success", "Zone updated.");
       } else {
-        const { data, error } = await untypedSupabase.from("delivery_zones").insert(payload).select().single();
+        const { data, error } = await supabase.from("delivery_zones").insert(payload).select().single();
         if (error) { showMessage("error", error.message); return; }
         setZones((prev) => [...prev, data as DeliveryZone]);
         showMessage("success", "Zone created.");
@@ -153,7 +153,7 @@ export default function AdminSettings() {
   async function deleteZone(id: string) {
     setDeletingZoneId(id);
     try {
-      const { error } = await untypedSupabase.from("delivery_zones").delete().eq("id", id);
+      const { error } = await supabase.from("delivery_zones").delete().eq("id", id);
       if (error) { showMessage("error", error.message); return; }
       setZones((prev) => prev.filter((z) => z.id !== id));
       pageCache.clear("admin-zones");

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { supabase, untypedSupabase } from "../../lib/supabase";
+import { supabase } from "../../lib/supabase";
 import type { DeliverySlot, DeliveryZone, SlotType } from "../../types";
 import { pageCache } from "../../lib/pageCache";
 import { getNextDays, isoDateSGT } from "../../lib/utils";
@@ -85,8 +85,8 @@ export default function SlotManagement() {
 
   useEffect(() => {
     init();
-    untypedSupabase.from("delivery_zones").select("*").order("created_at")
-      .then(({ data }: { data: DeliveryZone[] | null }) => { if (data) { setZones(data); pageCache.set('admin-zones', data); } });
+    supabase.from("delivery_zones").select("*").order("created_at")
+      .then(({ data }) => { if (data) { setZones(data as DeliveryZone[]); pageCache.set('admin-zones', data); } });
   }, []);
 
   useEffect(() => {
@@ -206,7 +206,7 @@ export default function SlotManagement() {
     });
     if (changed.length === 0) return;
     const updates = changed.map((s) =>
-      untypedSupabase.from("delivery_slots").update({ is_open: s.is_open, max_orders: s.max_orders, zone_id: s.zone_id ?? null }).eq("id", s.id)
+      supabase.from("delivery_slots").update({ is_open: s.is_open, max_orders: s.max_orders, zone_id: s.zone_id ?? null }).eq("id", s.id)
     );
     const results = await Promise.all(updates);
     const failed = results.filter((r) => r.error);
