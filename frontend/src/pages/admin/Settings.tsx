@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { pageCache } from "../../lib/pageCache";
 
-function useSetting(key: string, initial = "") {
+function useSetting(initial = "") {
   const [value, setValue] = useState(initial);
   const [saved, setSaved] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -15,12 +15,12 @@ function SectionLabel({ label }: { label: string }) {
 }
 
 export default function AdminSettings() {
-  const minVal    = useSetting("store_min_order_value", "0.00");
+  const minVal    = useSetting("0.00");
   const [minEnabled, setMinEnabled] = useState(false);
   const [savingToggle, setSavingToggle] = useState(false);
 
-  const uen       = useSetting("paynow_uen");
-  const weeks     = useSetting("max_weeks_out", "2");
+  const uen       = useSetting();
+  const weeks     = useSetting("2");
 
   const [loading, setLoading] = useState(!pageCache.get("admin-settings"));
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);

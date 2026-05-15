@@ -31,8 +31,8 @@ export default function Home() {
           setStoreMinEnabled(settingsRes.data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true");
           setStoreMinValue(parseFloat(settingsRes.data.find((s) => s.key === "store_min_order_value")?.value ?? "0") || 0);
         }
-      } catch (e) {
-        console.error("Failed to load products:", e);
+      } catch {
+        // network error — loading state clears via finally, skus stays empty
       } finally {
         setLoading(false);
       }

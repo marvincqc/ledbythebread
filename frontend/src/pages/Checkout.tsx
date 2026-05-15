@@ -53,9 +53,9 @@ function formatCutoffLabel(slot: DeliverySlot): string {
 
   if (cutoffSGT === todaySGT) return `Order before ${timeStr} today`;
 
-  const tomorrowUTC = new Date();
-  tomorrowUTC.setUTCDate(tomorrowUTC.getUTCDate() + 1);
-  if (cutoffSGT === tomorrowUTC.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }))
+  const tomorrow = new Date();
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  if (cutoffSGT === tomorrow.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }))
     return `Order before ${timeStr} tomorrow`;
 
   return `Order before ${timeStr} ${cutoff.toLocaleDateString("en-SG", {
@@ -91,7 +91,6 @@ export default function Checkout() {
   const [addressLookup, setAddressLookup] = useState<"idle" | "loading" | "found" | "error">("idle");
   const [addressResult, setAddressResult] = useState<OneMapResult | null>(null);
   const [addressError, setAddressError] = useState("");
-  const postalDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Contact state
   const [name, setName] = useState(profile?.full_name ?? "");
@@ -178,22 +177,14 @@ export default function Checkout() {
 
   // Auto-lookup when postal code reaches 6 digits
   useEffect(() => {
-    if (postalDebounce.current) clearTimeout(postalDebounce.current);
-
     if (postalCode.length < 6) {
       setAddressLookup("idle");
       setAddressResult(null);
       setAddressError("");
       return;
     }
-
-    if (postalCode.length === 6) {
-      postalDebounce.current = setTimeout(() => lookupPostal(postalCode), 400);
-    }
-
-    return () => {
-      if (postalDebounce.current) clearTimeout(postalDebounce.current);
-    };
+    const t = setTimeout(() => lookupPostal(postalCode), 400);
+    return () => clearTimeout(t);
   }, [postalCode]);
 
   async function lookupPostal(code: string) {
