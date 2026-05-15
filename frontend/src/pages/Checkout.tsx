@@ -36,11 +36,15 @@ function formatDate(dateStr: string): string {
 function getSlotCutoff(slot: DeliverySlot): Date {
   if (slot.cut_off_override) return new Date(slot.cut_off_override);
   const [y, m, d] = slot.delivery_date.split("-").map(Number);
-  // Morning: 5pm SGT prev day = 09:00 UTC prev day
-  // Evening: 11am SGT same day = 03:00 UTC same day
-  return slot.slot_type === "morning"
-    ? new Date(Date.UTC(y, m - 1, d - 1, 9, 0))
-    : new Date(Date.UTC(y, m - 1, d, 3, 0));
+  if (slot.slot_type === "morning") {
+    // Monday delivery: cut-off is Friday 5pm SGT (3 days back = 09:00 UTC)
+    // All other mornings: cut-off is previous day 5pm SGT
+    const isMonday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
+    const daysBack = isMonday ? 3 : 1;
+    return new Date(Date.UTC(y, m - 1, d - daysBack, 9, 0));
+  }
+  // Evening: 11am SGT same day = 03:00 UTC
+  return new Date(Date.UTC(y, m - 1, d, 3, 0));
 }
 
 function formatCutoffLabel(slot: DeliverySlot): string {
@@ -52,22 +56,18 @@ function formatCutoffLabel(slot: DeliverySlot): string {
     })}`;
   }
 
-  const [y, m, d] = slot.delivery_date.split("-").map(Number);
-  const cutoffUTC = slot.slot_type === "morning"
-    ? new Date(Date.UTC(y, m - 1, d - 1))
-    : new Date(Date.UTC(y, m - 1, d));
-
+  const cutoff = getSlotCutoff(slot);
+  const cutoffSGT = cutoff.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
   const todaySGT = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
-  const cutoffSGT = cutoffUTC.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
 
   if (cutoffSGT === todaySGT) return `Order before ${timeStr} today`;
 
   const tomorrowUTC = new Date();
   tomorrowUTC.setUTCDate(tomorrowUTC.getUTCDate() + 1);
-  const tomorrowSGT = tomorrowUTC.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
-  if (cutoffSGT === tomorrowSGT) return `Order before ${timeStr} tomorrow`;
+  if (cutoffSGT === tomorrowUTC.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }))
+    return `Order before ${timeStr} tomorrow`;
 
-  return `Order before ${timeStr} ${cutoffUTC.toLocaleDateString("en-SG", {
+  return `Order before ${timeStr} ${cutoff.toLocaleDateString("en-SG", {
     weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Singapore",
   })}`;
 }

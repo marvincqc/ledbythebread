@@ -9,8 +9,10 @@ const DEFAULT_MAX = 10;
 function slotCutoffLabel(deliveryDate: string, slotType: SlotType): string {
   if (slotType === "evening") return "cut-off 11am";
   const [y, m, d] = deliveryDate.split("-").map(Number);
-  const prev = new Date(y, m - 1, d - 1);
-  return `cut-off 5pm ${prev.toLocaleDateString("en-SG", { day: "numeric", month: "short" })}`;
+  const isMonday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
+  const daysBack = isMonday ? 3 : 1;
+  const cutoffDate = new Date(y, m - 1, d - daysBack);
+  return `cut-off 5pm ${cutoffDate.toLocaleDateString("en-SG", { day: "numeric", month: "short" })}`;
 }
 
 function getDateRange(weeksAhead: number): string[] {
