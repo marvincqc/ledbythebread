@@ -293,16 +293,17 @@ export default function OrderManagement() {
                   <thead className="bg-background">
                     <tr>
                       <th className="hidden sm:table-cell px-4 py-3 text-left text-xs text-text-muted font-medium uppercase tracking-wide">Order ID</th>
-                      {["Customer", "Delivery", "Total", "Status"].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left text-xs text-text-muted font-medium uppercase tracking-wide">
-                          {h}
-                        </th>
-                      ))}
+                      <th className="px-4 py-3 text-left text-xs text-text-muted font-medium uppercase tracking-wide">Customer</th>
                       <th className="px-4 py-3 text-center text-xs text-text-muted font-medium uppercase tracking-wide w-12">
                         <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                       </th>
+                      {["Delivery", "Status", "Total"].map((h) => (
+                        <th key={h} className="px-4 py-3 text-left text-xs text-text-muted font-medium uppercase tracking-wide">
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-primary/5">
@@ -328,18 +329,6 @@ export default function OrderManagement() {
                             <div className="font-medium text-text-main">{order.guest_info?.name ?? "—"}</div>
                             <div className="text-xs text-text-muted">{order.guest_info?.phone}</div>
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="text-xs font-medium text-text-main">{order.delivery_date}</div>
-                            <div className="text-xs text-text-muted capitalize">{order.slot_type}</div>
-                          </td>
-                          <td className="px-4 py-3 font-semibold text-primary">
-                            S${order.subtotal.toFixed(2)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`badge ${STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-800"}`}>
-                              {order.status}
-                            </span>
-                          </td>
                           <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             {(() => {
                               const count = unreadCounts.get(order.id) ?? 0;
@@ -364,6 +353,18 @@ export default function OrderManagement() {
                                 </button>
                               );
                             })()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-xs font-medium text-text-main">{order.delivery_date}</div>
+                            <div className="text-xs text-text-muted capitalize">{order.slot_type}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`badge ${STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-800"}`}>
+                              {order.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-primary">
+                            S${order.subtotal.toFixed(2)}
                           </td>
                         </tr>
                       ))
