@@ -57,24 +57,40 @@ export default function OrderConfirmation() {
     async function fetchOrder() {
       if (!id) return;
       setLoading(true);
-      try {
-        const { data, error: fetchError } = await supabase
-          .from("orders")
-          .select("*, order_items(*, sku:skus(*))")
-          .eq("id", id)
-          .single();
-        if (fetchError || !data) {
-          setError(
-            fetchError?.code === "PGRST116"
-              ? "Order not found. Please check your order ID."
-              : "Unable to load your order. Please refresh the page."
-          );
-        } else {
-          setOrder(data as unknown as Order);
+
+      // Retry up to 4 times with 800 ms gap — handles brief read-replica lag
+      // after the edge function writes to the primary DB.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 800));
+        try {
+          const { data, error: fetchError } = await supabase
+            .from("orders")
+            .select("*, order_items(*, sku:skus(*))")
+            .eq("id", id)
+            .single();
+
+          if (!fetchError && data) {
+            setOrder(data as unknown as Order);
+            setLoading(false);
+            return;
+          }
+
+          // Only retry on "no rows" — not on auth or network errors
+          if (fetchError?.code !== "PGRST116" || attempt === 3) {
+            setError(
+              fetchError?.code === "PGRST116"
+                ? "Order not found. Please check your order ID."
+                : "Unable to load your order. Please refresh the page."
+            );
+            break;
+          }
+        } catch {
+          setError("Unable to load your order. Please refresh the page.");
+          break;
         }
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     }
 
     fetchOrder();
