@@ -37,6 +37,8 @@ export default function OrderManagement() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
+  const [deletingOrder, setDeletingOrder] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // order_id → unread customer message count
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
@@ -159,6 +161,7 @@ export default function OrderManagement() {
 
   async function selectOrder(order: Order) {
     setSelectedOrder(order);
+    setShowDeleteConfirm(false);
     setUnreadCounts((prev) => { const next = new Map(prev); next.delete(order.id); return next; });
     if (order.order_items) return;
     setLoadingDetail(true);
@@ -203,6 +206,36 @@ export default function OrderManagement() {
   function showMessage(type: "success" | "error", text: string) {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
+  }
+
+  async function deleteOrder(order: Order) {
+    setDeletingOrder(true);
+    try {
+      // Delete related records first, then the order itself
+      await supabase.from("order_messages").delete().eq("order_id", order.id);
+      await supabase.from("order_items").delete().eq("order_id", order.id);
+      const { error } = await supabase.from("orders").delete().eq("id", order.id);
+      if (error) throw error;
+
+      // Decrement slot counter if this was an active order
+      const activeStatuses = new Set(["pending", "confirmed", "preparing"]);
+      if (activeStatuses.has(order.status)) {
+        await supabase.rpc("decrement_slot_orders", {
+          p_delivery_date: order.delivery_date,
+          p_slot_type: order.slot_type,
+        });
+      }
+
+      setOrders((prev) => prev.filter((o) => o.id !== order.id));
+      pageCache.clear("admin-orders");
+      setSelectedOrder(null);
+      setShowDeleteConfirm(false);
+      showMessage("success", "Order deleted permanently.");
+    } catch {
+      showMessage("error", "Failed to delete order. Please try again.");
+    } finally {
+      setDeletingOrder(false);
+    }
   }
 
   function csvEscape(val: string | number | null | undefined): string {
@@ -500,7 +533,7 @@ export default function OrderManagement() {
                     <button
                       key={s}
                       onClick={() => updateStatus(selectedOrder, s)}
-                      disabled={updatingId === selectedOrder.id}
+                      disabled={updatingId === selectedOrder.id || deletingOrder}
                       className={`w-full text-left text-xs px-3 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
                         s === "cancelled"
                           ? "bg-red-50 hover:bg-red-100 text-red-700"
@@ -510,6 +543,40 @@ export default function OrderManagement() {
                       {updatingId === selectedOrder.id ? "Updating…" : STATUS_ACTION_LABELS[s]}
                     </button>
                   ))}
+                </div>
+
+                <div className="border-t border-red-100 mt-3 pt-3">
+                  {showDeleteConfirm ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-red-700 font-medium">
+                        Permanently delete order #{formatOrderId(selectedOrder.created_at)}? This removes all items and messages and cannot be undone.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowDeleteConfirm(false)}
+                          disabled={deletingOrder}
+                          className="flex-1 text-xs px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-text-muted font-medium transition-colors disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => deleteOrder(selectedOrder)}
+                          disabled={deletingOrder}
+                          className="flex-1 text-xs px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors disabled:opacity-50"
+                        >
+                          {deletingOrder ? "Deleting…" : "Yes, delete"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      disabled={updatingId === selectedOrder.id || deletingOrder}
+                      className="w-full text-left text-xs px-3 py-2 rounded-lg font-medium transition-colors bg-red-50 hover:bg-red-100 text-red-700 disabled:opacity-50"
+                    >
+                      Delete Order
+                    </button>
+                  )}
                 </div>
               </div>
 
