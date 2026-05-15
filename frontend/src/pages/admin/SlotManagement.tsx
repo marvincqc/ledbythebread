@@ -6,12 +6,31 @@ import { pageCache } from "../../lib/pageCache";
 
 const DEFAULT_MAX = 10;
 
-function slotCutoffLabel(deliveryDate: string, slotType: SlotType): string {
+function getSlotCutoffDate(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null): Date {
+  if (cutoffOverride) return new Date(cutoffOverride);
+  const [y, m, d] = deliveryDate.split("-").map(Number);
+  if (slotType === "morning") {
+    const isMonday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
+    return new Date(Date.UTC(y, m - 1, d - (isMonday ? 3 : 1), 9, 0));
+  }
+  return new Date(Date.UTC(y, m - 1, d, 3, 0));
+}
+
+function isSlotExpired(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null): boolean {
+  return new Date() >= getSlotCutoffDate(deliveryDate, slotType, cutoffOverride);
+}
+
+function slotCutoffLabel(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null): string {
+  if (isSlotExpired(deliveryDate, slotType, cutoffOverride)) return "expired";
+  if (cutoffOverride) {
+    return `cut-off ${new Date(cutoffOverride).toLocaleTimeString("en-SG", {
+      hour: "numeric", minute: "2-digit", timeZone: "Asia/Singapore", hour12: true,
+    })}`;
+  }
   if (slotType === "evening") return "cut-off 11am";
   const [y, m, d] = deliveryDate.split("-").map(Number);
   const isMonday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
-  const daysBack = isMonday ? 3 : 1;
-  const cutoffDate = new Date(y, m - 1, d - daysBack);
+  const cutoffDate = new Date(y, m - 1, d - (isMonday ? 3 : 1));
   return `cut-off 5pm ${cutoffDate.toLocaleDateString("en-SG", { day: "numeric", month: "short" })}`;
 }
 
@@ -291,11 +310,14 @@ export default function SlotManagement() {
                           const slot = getSlot(date, type);
                           if (!slot) return null;
                           const isFull = slot.current_orders >= slot.max_orders;
+                          const expired = isSlotExpired(date, type, slot.cut_off_override ?? null);
                           return (
                             <div
                               key={type}
                               className={`flex-1 rounded-lg border transition-all ${
-                                !slot.is_open
+                                expired
+                                  ? "bg-gray-50 border-gray-300 opacity-60"
+                                  : !slot.is_open
                                   ? "bg-gray-50 border-gray-200"
                                   : isFull
                                   ? "bg-orange-50 border-orange-200"
@@ -305,7 +327,9 @@ export default function SlotManagement() {
                               <div className="px-3 py-2 flex items-center justify-between">
                                 <div>
                                   <span className="text-xs text-text-muted block">{type === "morning" ? "🌅 Morning" : "🌇 Evening"}</span>
-                                  <span className="text-xs text-text-muted/60 block">{slotCutoffLabel(date, type)}</span>
+                                  <span className={`text-xs block ${expired ? "text-error/60 italic" : "text-text-muted/60"}`}>
+                                    {slotCutoffLabel(date, type, slot.cut_off_override ?? null)}
+                                  </span>
                                   {editingCapacity?.id === slot.id ? (
                                     <input
                                       ref={capacityInputRef}
@@ -322,11 +346,9 @@ export default function SlotManagement() {
                                     />
                                   ) : (
                                     <button
-                                      onClick={() => setEditingCapacity({ id: slot.id, value: String(slot.max_orders) })}
-                                      title="Click to edit capacity"
-                                      className={`text-sm font-bold hover:underline ${
-                                        !slot.is_open ? "text-gray-500" : isFull ? "text-orange-700" : "text-green-700"
-                                      }`}
+                                      onClick={() => !expired && setEditingCapacity({ id: slot.id, value: String(slot.max_orders) })}
+                                      title={expired ? undefined : "Click to edit capacity"}
+                                      className={`text-sm font-bold ${expired ? "text-gray-400 cursor-default" : `hover:underline ${!slot.is_open ? "text-gray-500" : isFull ? "text-orange-700" : "text-green-700"}`}`}
                                     >
                                       {slot.current_orders}/{slot.max_orders}
                                     </button>
@@ -334,9 +356,9 @@ export default function SlotManagement() {
                                 </div>
                                 <button
                                   onClick={() => toggleSlot(slot)}
-                                  title={slot.is_open ? "Click to close" : "Click to open"}
+                                  title={expired ? "Cut-off passed — customers cannot order this slot" : slot.is_open ? "Click to close" : "Click to open"}
                                   className={`relative w-10 h-5 rounded-full transition-colors ${
-                                    slot.is_open ? "bg-green-500" : "bg-gray-300"
+                                    expired ? "bg-gray-300 cursor-not-allowed" : slot.is_open ? "bg-green-500" : "bg-gray-300"
                                   }`}
                                 >
                                   <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
