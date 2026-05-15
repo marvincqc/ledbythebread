@@ -28,6 +28,11 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Escape hatch for tables not yet in database.types.ts (e.g. after a migration before types are regenerated).
+// Replace with typed supabase.from() once `npx supabase gen types` has been re-run.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const untypedSupabase = supabase as any;
+
 // Helper: call an edge function with the current user's JWT
 export async function callEdgeFunction<T = unknown>(
   functionName: string,

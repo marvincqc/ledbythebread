@@ -18,6 +18,15 @@ function corsHeaders(req: Request) {
   };
 }
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
 interface OrderItem {
   sku_id: string;
   quantity: number;
@@ -102,11 +111,20 @@ serve(async (req: Request) => {
     }
 
     // Delivery slot
-    const { data: slot, error: slotError } = await supabase.from("delivery_slots").select("*")
+    const { data: slot, error: slotError } = await supabase.from("delivery_slots")
+      .select("*, zone:delivery_zones(*)")
       .eq("delivery_date", payload.delivery_date).eq("slot_type", payload.slot_type).single();
     if (slotError || !slot) return error("Delivery slot not found", 404, headers);
     if (!slot.is_open) return error("This delivery slot is closed", 400, headers);
     if (slot.current_orders >= slot.max_orders) return error("This delivery slot is fully booked", 400, headers);
+
+    // Delivery zone check
+    if (slot.zone && payload.lat != null && payload.lng != null) {
+      const dist = haversineKm(payload.lat, payload.lng, slot.zone.center_lat, slot.zone.center_lng);
+      if (dist > slot.zone.radius_km) {
+        return error("Delivery is not available to your address for this slot.", 400, headers);
+      }
+    }
 
     // Cut-off time
     const { data: cutoffResult } = await supabase.rpc("get_slot_cutoff", {

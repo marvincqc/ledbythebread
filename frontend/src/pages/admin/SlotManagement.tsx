@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
-import type { DeliverySlot, SlotType } from "../../types";
+import { supabase, untypedSupabase } from "../../lib/supabase";
+import type { DeliverySlot, DeliveryZone, SlotType } from "../../types";
 import { pageCache } from "../../lib/pageCache";
 import { getNextDays, isoDateSGT } from "../../lib/utils";
 
@@ -77,12 +77,17 @@ export default function SlotManagement() {
   const [slots, setSlots] = useState<DeliverySlot[]>(() => pageCache.get<DeliverySlot[]>('admin-slots') ?? []);
   const [savedSlots, setSavedSlots] = useState<DeliverySlot[]>(() => pageCache.get<DeliverySlot[]>('admin-slots') ?? []);
   const [loading, setLoading] = useState(!pageCache.get('admin-slots'));
+  const [zones, setZones] = useState<DeliveryZone[]>(() => pageCache.get<DeliveryZone[]>('admin-zones') ?? []);
   const [weeksAhead, setWeeksAhead] = useState(2);
   const [editingCapacity, setEditingCapacity] = useState<{ id: string; value: string } | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const capacityInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { init(); }, []);
+  useEffect(() => {
+    init();
+    untypedSupabase.from("delivery_zones").select("*").order("created_at")
+      .then(({ data }: { data: DeliveryZone[] | null }) => { if (data) { setZones(data); pageCache.set('admin-zones', data); } });
+  }, []);
 
   useEffect(() => {
     if (editingCapacity) capacityInputRef.current?.focus();
@@ -182,6 +187,10 @@ export default function SlotManagement() {
     setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, is_open: !slot.is_open } : s));
   }
 
+  function changeZone(slot: DeliverySlot, zoneId: string | null) {
+    setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, zone_id: zoneId } : s));
+  }
+
   function saveCapacity(slot: DeliverySlot, value: string) {
     const max = parseInt(value);
     if (isNaN(max) || max < 1) { setEditingCapacity(null); return; }
@@ -193,11 +202,11 @@ export default function SlotManagement() {
   async function saveAllSlots() {
     const changed = slots.filter((s) => {
       const saved = savedSlots.find((ss) => ss.id === s.id);
-      return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders);
+      return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders || s.zone_id !== saved.zone_id);
     });
     if (changed.length === 0) return;
     const updates = changed.map((s) =>
-      supabase.from("delivery_slots").update({ is_open: s.is_open, max_orders: s.max_orders }).eq("id", s.id)
+      untypedSupabase.from("delivery_slots").update({ is_open: s.is_open, max_orders: s.max_orders, zone_id: s.zone_id ?? null }).eq("id", s.id)
     );
     const results = await Promise.all(updates);
     const failed = results.filter((r) => r.error);
@@ -234,7 +243,7 @@ export default function SlotManagement() {
   // Dirty tracking
   const changedSlots = slots.filter((s) => {
     const saved = savedSlots.find((ss) => ss.id === s.id);
-    return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders);
+    return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders || s.zone_id !== saved.zone_id);
   });
   const isDirty = changedSlots.length > 0;
 
@@ -343,6 +352,19 @@ export default function SlotManagement() {
                                     >
                                       {slot.current_orders}/{slot.max_orders}
                                     </button>
+                                  )}
+                                  {zones.length > 0 && (
+                                    <select
+                                      value={slot.zone_id ?? ""}
+                                      onChange={(e) => changeZone(slot, e.target.value || null)}
+                                      className="mt-1 text-xs border border-primary/20 rounded px-1 py-0.5 bg-white text-text-muted focus:outline-none focus:border-primary max-w-[100px]"
+                                      title="Delivery zone"
+                                    >
+                                      <option value="">All areas</option>
+                                      {zones.map((z) => (
+                                        <option key={z.id} value={z.id}>{z.name}</option>
+                                      ))}
+                                    </select>
                                   )}
                                 </div>
                                 <button

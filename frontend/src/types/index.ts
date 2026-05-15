@@ -39,6 +39,15 @@ export interface Sku {
 
 export type SlotType = "morning" | "evening";
 
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  center_lat: number;
+  center_lng: number;
+  radius_km: number;
+  created_at: string;
+}
+
 export interface DeliverySlot {
   id: string;
   delivery_date: string;
@@ -47,6 +56,8 @@ export interface DeliverySlot {
   current_orders: number;
   is_open: boolean;
   cut_off_override: string | null;
+  zone_id?: string | null;
+  zone?: DeliveryZone | null;
 }
 
 export type OrderStatus =

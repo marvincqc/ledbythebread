@@ -2,10 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
-import { supabase, callEdgeFunction } from "../lib/supabase";
+import { supabase, untypedSupabase, callEdgeFunction } from "../lib/supabase";
 import type { DeliverySlot, SlotType } from "../types";
 import { WHATSAPP_LINK } from "../lib/constants";
-import { getNextDays } from "../lib/utils";
+import { getNextDays, haversineKm } from "../lib/utils";
 
 function SectionHeader({ step, title }: { step: number; title: string }) {
   return (
@@ -161,8 +161,10 @@ export default function Checkout() {
   useEffect(() => {
     async function fetchSlots() {
       setSlotsLoading(true);
-      const { data } = await supabase
-        .from("delivery_slots").select("*").eq("is_open", true)
+      const { data } = await untypedSupabase
+        .from("delivery_slots")
+        .select("*, zone:delivery_zones(*)")
+        .eq("is_open", true)
         .order("delivery_date", { ascending: true })
         .order("slot_type", { ascending: true });
       if (data) setSlots(data as DeliverySlot[]);
@@ -245,9 +247,20 @@ export default function Checkout() {
 
   const getSlotsForDate = (date: string) => slots.filter((s) => s.delivery_date === date);
 
+  // Returns false only when a zone is set AND the customer's address is known AND outside the zone.
+  // Before address is entered, all slots pass (we can't filter without coordinates).
+  const customerLat = addressResult ? parseFloat(addressResult.LATITUDE) : null;
+  const customerLng = addressResult ? parseFloat(addressResult.LONGITUDE) : null;
+
+  function isSlotInRange(slot: DeliverySlot): boolean {
+    if (!slot.zone || customerLat === null || customerLng === null) return true;
+    return haversineKm(customerLat, customerLng, slot.zone.center_lat, slot.zone.center_lng) <= slot.zone.radius_km;
+  }
+
   const getSlotStatus = (slot: DeliverySlot) => {
     if (!slot.is_open) return "closed";
     if (new Date() >= getSlotCutoff(slot)) return "closed";
+    if (!isSlotInRange(slot)) return "out_of_range";
     if (slot.current_orders >= slot.max_orders) return "full";
     return "open";
   };
@@ -297,6 +310,12 @@ export default function Checkout() {
 
     if (!proofUrl) {
       setError("Please upload your PayNow payment screenshot before placing your order.");
+      return;
+    }
+
+    const selectedSlotObj = slots.find((s) => s.delivery_date === selectedDate && s.slot_type === selectedSlot);
+    if (selectedSlotObj && !isSlotInRange(selectedSlotObj)) {
+      setError("This delivery slot is not available for your address. Please select a different slot.");
       return;
     }
 
@@ -381,7 +400,7 @@ export default function Checkout() {
                 {dates.map((date) => {
                   const dateSlots = getSlotsForDate(date);
                   const hasOpen = dateSlots.some(
-                    (s) => s.is_open && new Date() < getSlotCutoff(s) && s.current_orders < s.max_orders
+                    (s) => s.is_open && new Date() < getSlotCutoff(s) && s.current_orders < s.max_orders && isSlotInRange(s)
                   );
                   const isSelected = selectedDate === date;
                   return (
@@ -428,12 +447,13 @@ export default function Checkout() {
                               setWaitlistError(null);
                             }
                           }}
-                          disabled={status === "closed"}
+                          disabled={status === "closed" || status === "out_of_range"}
                           className={`relative p-4 rounded-card border-2 text-left transition-all ${
                             isSelected ? "border-primary bg-primary/5"
                             : isWaitlistTarget ? "border-amber-400 bg-amber-50"
                             : status === "open" ? "border-primary/20 hover:border-primary/50 bg-white"
                             : status === "full" ? "border-amber-200 bg-amber-50/50 hover:border-amber-400 cursor-pointer"
+                            : status === "out_of_range" ? "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
                             : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
                           }`}
                         >
@@ -451,7 +471,7 @@ export default function Checkout() {
                           <p className="text-xs text-text-muted">
                             {slotType === "morning" ? "7:00 AM – 10:00 AM" : "5:00 PM – 8:00 PM"} · Delivered to your door
                           </p>
-                          {slot && status !== "closed" && (
+                          {slot && status !== "closed" && status !== "out_of_range" && (
                             <p className="text-xs text-text-muted/70 mt-0.5">
                               {formatCutoffLabel(slot)}
                             </p>
@@ -459,6 +479,7 @@ export default function Checkout() {
                           <p className="text-xs mt-1">
                             {status === "open" && slot && <span className="text-success font-medium">{slot.max_orders - slot.current_orders} slots left</span>}
                             {status === "full" && <span className="text-amber-600 font-medium">Fully booked · tap to join waitlist</span>}
+                            {status === "out_of_range" && <span className="text-text-muted">Not available to your area</span>}
                             {status === "closed" && <span className="text-text-muted">Closed</span>}
                           </p>
                         </button>
