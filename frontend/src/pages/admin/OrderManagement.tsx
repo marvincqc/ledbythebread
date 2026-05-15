@@ -57,6 +57,7 @@ export default function OrderManagement() {
   const msgPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesCardRef = useRef<HTMLDivElement>(null);
+  const detailPanelRef = useRef<HTMLDivElement>(null);
 
   const closeLightbox = useCallback(() => setLightboxUrl(null), []);
 
@@ -106,6 +107,13 @@ export default function OrderManagement() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+    if (window.innerWidth < 1024) {
+      setTimeout(() => detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+    }
+  }, [selectedOrder?.id]);
 
   async function sendAdminMessage() {
     if (!newMsg.trim() || !selectedOrder) return;
@@ -265,7 +273,7 @@ export default function OrderManagement() {
           </div>
         </div>
 
-        <div className="flex gap-5">
+        <div className="flex flex-col lg:flex-row gap-5">
           {/* Order table */}
           <div className="flex-1 card overflow-hidden min-w-0">
             <div className="px-5 py-3 border-b border-primary/10 flex items-center justify-between">
@@ -284,7 +292,8 @@ export default function OrderManagement() {
                 <table className="w-full text-sm">
                   <thead className="bg-background">
                     <tr>
-                      {["Order ID", "Customer", "Delivery", "Total", "Status"].map((h) => (
+                      <th className="hidden sm:table-cell px-4 py-3 text-left text-xs text-text-muted font-medium uppercase tracking-wide">Order ID</th>
+                      {["Customer", "Delivery", "Total", "Status"].map((h) => (
                         <th key={h} className="px-4 py-3 text-left text-xs text-text-muted font-medium uppercase tracking-wide">
                           {h}
                         </th>
@@ -312,7 +321,7 @@ export default function OrderManagement() {
                             selectedOrder?.id === order.id ? "bg-primary/8 border-l-2 border-l-primary" : ""
                           }`}
                         >
-                          <td className="px-4 py-3">
+                          <td className="hidden sm:table-cell px-4 py-3">
                             <span className="font-mono text-xs font-bold text-text-main">{formatOrderId(order.created_at)}</span>
                           </td>
                           <td className="px-4 py-3">
@@ -367,7 +376,7 @@ export default function OrderManagement() {
 
           {/* Detail panel */}
           {selectedOrder && (
-            <div className="w-72 flex-shrink-0 space-y-3 sticky top-4 h-fit">
+            <div ref={detailPanelRef} className="w-full lg:w-72 flex-shrink-0 space-y-3 lg:sticky lg:top-4 h-fit">
               {/* Header */}
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-3">
