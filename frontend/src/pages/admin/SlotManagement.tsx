@@ -6,6 +6,13 @@ import { pageCache } from "../../lib/pageCache";
 
 const DEFAULT_MAX = 10;
 
+function slotCutoffLabel(deliveryDate: string, slotType: SlotType): string {
+  if (slotType === "evening") return "cut-off 11am";
+  const [y, m, d] = deliveryDate.split("-").map(Number);
+  const prev = new Date(y, m - 1, d - 1);
+  return `cut-off 5pm ${prev.toLocaleDateString("en-SG", { day: "numeric", month: "short" })}`;
+}
+
 function getDateRange(weeksAhead: number): string[] {
   const dates: string[] = [];
   for (let i = 0; i < weeksAhead * 7; i++) {
@@ -296,6 +303,7 @@ export default function SlotManagement() {
                               <div className="px-3 py-2 flex items-center justify-between">
                                 <div>
                                   <span className="text-xs text-text-muted block">{type === "morning" ? "🌅 Morning" : "🌇 Evening"}</span>
+                                  <span className="text-xs text-text-muted/60 block">{slotCutoffLabel(date, type)}</span>
                                   {editingCapacity?.id === slot.id ? (
                                     <input
                                       ref={capacityInputRef}
