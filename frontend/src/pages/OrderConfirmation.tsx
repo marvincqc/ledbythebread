@@ -64,7 +64,11 @@ export default function OrderConfirmation() {
           .eq("id", id)
           .single();
         if (fetchError || !data) {
-          setError("Order not found. Please check your order ID.");
+          setError(
+            fetchError?.code === "PGRST116"
+              ? "Order not found. Please check your order ID."
+              : "Unable to load your order. Please refresh the page."
+          );
         } else {
           setOrder(data as unknown as Order);
         }
