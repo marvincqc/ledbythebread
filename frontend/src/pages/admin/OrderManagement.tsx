@@ -46,7 +46,8 @@ export default function OrderManagement() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const [unreadOrderIds, setUnreadOrderIds] = useState<Set<string>>(new Set());
+  // order_id → unread customer message count
+  const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
 
   // Messages
   const [messages, setMessages] = useState<OrderMessage[]>([]);
@@ -55,6 +56,7 @@ export default function OrderManagement() {
   const msgChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const msgPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesCardRef = useRef<HTMLDivElement>(null);
 
   const closeLightbox = useCallback(() => setLightboxUrl(null), []);
 
@@ -137,16 +139,27 @@ export default function OrderManagement() {
       ]);
       if (ordersRes.data) { setOrders(ordersRes.data as Order[]); pageCache.set('admin-orders', ordersRes.data); }
       if (unreadRes.data) {
-        setUnreadOrderIds(new Set((unreadRes.data as { order_id: string }[]).map((r) => r.order_id)));
+        const counts = new Map<string, number>();
+        for (const row of unreadRes.data as { order_id: string }[]) {
+          counts.set(row.order_id, (counts.get(row.order_id) ?? 0) + 1);
+        }
+        setUnreadCounts(counts);
       }
     } finally {
       setLoading(false);
     }
   }
 
+  function openMessages(order: Order) {
+    selectOrder(order);
+    setTimeout(() => {
+      messagesCardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 200);
+  }
+
   async function selectOrder(order: Order) {
     setSelectedOrder(order);
-    setUnreadOrderIds((prev) => { const next = new Set(prev); next.delete(order.id); return next; });
+    setUnreadCounts((prev) => { const next = new Map(prev); next.delete(order.id); return next; });
     if (order.order_items) return;
     setLoadingDetail(true);
     try {
@@ -276,12 +289,17 @@ export default function OrderManagement() {
                           {h}
                         </th>
                       ))}
+                      <th className="px-4 py-3 text-center text-xs text-text-muted font-medium uppercase tracking-wide w-12">
+                        <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-primary/5">
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-5 py-10 text-center text-text-muted">
+                        <td colSpan={6} className="px-5 py-10 text-center text-text-muted">
                           No orders found.
                         </td>
                       </tr>
@@ -298,12 +316,7 @@ export default function OrderManagement() {
                             <span className="font-mono text-xs font-bold text-text-main">{formatOrderId(order.created_at)}</span>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-medium text-text-main">{order.guest_info?.name ?? "—"}</span>
-                              {unreadOrderIds.has(order.id) && (
-                                <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" title="Unread message" />
-                              )}
-                            </div>
+                            <div className="font-medium text-text-main">{order.guest_info?.name ?? "—"}</div>
                             <div className="text-xs text-text-muted">{order.guest_info?.phone}</div>
                           </td>
                           <td className="px-4 py-3">
@@ -317,6 +330,31 @@ export default function OrderManagement() {
                             <span className={`badge ${STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-800"}`}>
                               {order.status}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            {(() => {
+                              const count = unreadCounts.get(order.id) ?? 0;
+                              return (
+                                <button
+                                  onClick={() => openMessages(order)}
+                                  title={count > 0 ? `${count} unread message${count > 1 ? "s" : ""}` : "Messages"}
+                                  className={`relative p-1.5 rounded-lg transition-colors ${
+                                    count > 0
+                                      ? "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
+                                      : "text-gray-300 hover:text-gray-400 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                  </svg>
+                                  {count > 0 && (
+                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-xs rounded-full flex items-center justify-center font-bold leading-none">
+                                      {count}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })()}
                           </td>
                         </tr>
                       ))
@@ -418,7 +456,7 @@ export default function OrderManagement() {
               )}
 
               {/* Messages */}
-              <div className="card p-4">
+              <div ref={messagesCardRef} className="card p-4">
                 <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">
                   Messages
                   {unreadMessageCount > 0 && (
