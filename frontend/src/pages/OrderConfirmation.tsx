@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import type { Order, OrderStatus, OrderMessage } from "../types";
 import { CUSTOMER_STATUS_LABELS } from "../types";
 import { WHATSAPP_LINK } from "../lib/constants";
+import { formatOrderId } from "../lib/utils";
 
 const TIMELINE_STEPS: { statuses: OrderStatus[]; label: string; icon: string }[] = [
   { statuses: ["pending"],             label: "Order Received",   icon: "📋" },
@@ -11,11 +12,6 @@ const TIMELINE_STEPS: { statuses: OrderStatus[]; label: string; icon: string }[]
   { statuses: ["preparing"],           label: "Being Prepared",   icon: "👨‍🍳" },
   { statuses: ["delivered"],           label: "Delivered",        icon: "🎉" },
 ];
-
-function formatOrderId(createdAt: string): string {
-  const d = new Date(createdAt);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}-${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
-}
 
 function getStepIndex(status: OrderStatus): number {
   for (let i = 0; i < TIMELINE_STEPS.length; i++) {

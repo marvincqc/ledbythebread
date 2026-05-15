@@ -5,6 +5,7 @@ import { useAuthStore } from "../store/authStore";
 import { supabase, callEdgeFunction } from "../lib/supabase";
 import type { DeliverySlot, SlotType } from "../types";
 import { WHATSAPP_LINK } from "../lib/constants";
+import { getNextDays } from "../lib/utils";
 
 function SectionHeader({ step, title }: { step: number; title: string }) {
   return (
@@ -15,16 +16,6 @@ function SectionHeader({ step, title }: { step: number; title: string }) {
       <h2 className="font-heading text-xl font-semibold text-primary">{title}</h2>
     </div>
   );
-}
-
-function getNextDays(count: number): string[] {
-  const dates: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().split("T")[0]);
-  }
-  return dates;
 }
 
 function formatDate(dateStr: string): string {
@@ -112,6 +103,7 @@ export default function Checkout() {
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
   const [proofUrl, setProofUrl] = useState<string | null>(null);
+  const proofObjectUrl = useRef<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,8 +132,15 @@ export default function Checkout() {
       });
   }, []);
 
+  useEffect(() => {
+    return () => { if (proofObjectUrl.current) URL.revokeObjectURL(proofObjectUrl.current); };
+  }, []);
+
   async function handleProofUpload(file: File) {
-    setProofPreview(URL.createObjectURL(file));
+    if (proofObjectUrl.current) URL.revokeObjectURL(proofObjectUrl.current);
+    const objectUrl = URL.createObjectURL(file);
+    proofObjectUrl.current = objectUrl;
+    setProofPreview(objectUrl);
     setUploadingProof(true);
     setProofUrl(null);
 

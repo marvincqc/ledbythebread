@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import type { Sku } from "../../types";
@@ -39,21 +39,10 @@ export default function SkuManagement() {
   const dragId = useRef<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
-  // Dirty tracking: compare current skus to savedSkus
-  const isDirty = useCallback(() => {
-    if (skus.length !== savedSkus.length) return true;
-    return skus.some((s, i) => {
-      const saved = savedSkus.find((ss) => ss.id === s.id);
-      if (!saved) return true;
-      return (
-        s.sort_order !== saved.sort_order ||
-        s.is_promo !== saved.is_promo ||
-        s.is_active !== saved.is_active
-      );
-    });
-  }, [skus, savedSkus]);
-
-  const dirty = isDirty();
+  const dirty = skus.length !== savedSkus.length || skus.some((s) => {
+    const saved = savedSkus.find((ss) => ss.id === s.id);
+    return !saved || s.sort_order !== saved.sort_order || s.is_promo !== saved.is_promo || s.is_active !== saved.is_active;
+  });
 
   useEffect(() => { fetchData(); }, []);
 
@@ -251,7 +240,6 @@ export default function SkuManagement() {
     s.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Count changes for the save bar
   const changeCount = skus.reduce((n, s) => {
     const saved = savedSkus.find((ss) => ss.id === s.id);
     if (!saved) return n;

@@ -4,16 +4,7 @@ import { supabase, callEdgeFunction } from "../../lib/supabase";
 import type { Order, OrderStatus, SlotType, OrderMessage } from "../../types";
 import { STATUS_COLORS, STATUS_ACTION_LABELS } from "../../types";
 import { pageCache } from "../../lib/pageCache";
-
-function formatOrderId(createdAt: string): string {
-  const d = new Date(createdAt);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}-${hh}${min}`;
-}
+import { formatOrderId, isoDateSGT } from "../../lib/utils";
 
 interface Filters {
   dateFrom: string;
@@ -29,12 +20,12 @@ export default function OrderManagement() {
   const [orders, setOrders] = useState<Order[]>(() => pageCache.get<Order[]>('admin-orders') ?? []);
   const [loading, setLoading] = useState(!pageCache.get('admin-orders'));
   const [filters, setFilters] = useState<Filters>(() => {
-    const today = new Date();
-    const twoWeeksLater = new Date(today);
-    twoWeeksLater.setDate(today.getDate() + 13);
+    const todaySGT = isoDateSGT();
+    const [y, m, d] = todaySGT.split("-").map(Number);
+    const twoWeeksLater = new Date(Date.UTC(y, m - 1, d + 13)).toISOString().split("T")[0];
     return {
-      dateFrom: today.toISOString().split("T")[0],
-      dateTo: twoWeeksLater.toISOString().split("T")[0],
+      dateFrom: todaySGT,
+      dateTo: twoWeeksLater,
       slot: "",
       status: "",
       search: "",
@@ -395,14 +386,16 @@ export default function OrderManagement() {
                         </td>
                       </tr>
                     ) : (
-                      filteredOrders.map((order) => (
-                        <tr
-                          key={order.id}
-                          onClick={() => selectOrder(order)}
-                          className={`cursor-pointer transition-colors hover:bg-primary/5 ${
-                            selectedOrder?.id === order.id ? "bg-primary/8 border-l-2 border-l-primary" : ""
-                          }`}
-                        >
+                      filteredOrders.map((order) => {
+                        const msgCount = unreadCounts.get(order.id) ?? 0;
+                        return (
+                          <tr
+                            key={order.id}
+                            onClick={() => selectOrder(order)}
+                            className={`cursor-pointer transition-colors hover:bg-primary/5 ${
+                              selectedOrder?.id === order.id ? "bg-primary/8 border-l-2 border-l-primary" : ""
+                            }`}
+                          >
                           <td className="hidden sm:table-cell px-4 py-3">
                             <span className="font-mono text-xs font-bold text-text-main">{formatOrderId(order.created_at)}</span>
                           </td>
@@ -411,29 +404,24 @@ export default function OrderManagement() {
                             <div className="text-xs text-text-muted">{order.guest_info?.phone}</div>
                           </td>
                           <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                            {(() => {
-                              const count = unreadCounts.get(order.id) ?? 0;
-                              return (
-                                <button
-                                  onClick={() => openMessages(order)}
-                                  title={count > 0 ? `${count} unread message${count > 1 ? "s" : ""}` : "Messages"}
-                                  className={`relative p-1.5 rounded-lg transition-colors ${
-                                    count > 0
-                                      ? "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
-                                      : "text-gray-300 hover:text-gray-400 hover:bg-gray-50"
-                                  }`}
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                  </svg>
-                                  {count > 0 && (
-                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-xs rounded-full flex items-center justify-center font-bold leading-none">
-                                      {count}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })()}
+                            <button
+                              onClick={() => openMessages(order)}
+                              title={msgCount > 0 ? `${msgCount} unread message${msgCount > 1 ? "s" : ""}` : "Messages"}
+                              className={`relative p-1.5 rounded-lg transition-colors ${
+                                msgCount > 0
+                                  ? "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
+                                  : "text-gray-300 hover:text-gray-400 hover:bg-gray-50"
+                              }`}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                              </svg>
+                              {msgCount > 0 && (
+                                <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-xs rounded-full flex items-center justify-center font-bold leading-none">
+                                  {msgCount}
+                                </span>
+                              )}
+                            </button>
                           </td>
                           <td className="px-4 py-3">
                             <div className="text-xs font-medium text-text-main">{order.delivery_date}</div>
@@ -447,8 +435,9 @@ export default function OrderManagement() {
                           <td className="px-4 py-3 font-semibold text-primary">
                             S${order.subtotal.toFixed(2)}
                           </td>
-                        </tr>
-                      ))
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

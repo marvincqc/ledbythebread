@@ -5,7 +5,6 @@ import { useAuthStore } from "../store/authStore";
 import CartPanel from "./CartPanel";
 import { WHATSAPP_LINK } from "../lib/constants";
 
-
 const CartButton = ({ onClick, totalItems }: { onClick: () => void; totalItems: number }) => (
   <button
     onClick={onClick}

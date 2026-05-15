@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import type { DeliverySlot, SlotType } from "../../types";
 import { pageCache } from "../../lib/pageCache";
+import { getNextDays, isoDateSGT } from "../../lib/utils";
 
 const DEFAULT_MAX = 10;
 
@@ -32,16 +33,6 @@ function slotCutoffLabel(deliveryDate: string, slotType: SlotType, cutoffOverrid
   const isMonday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
   const cutoffDate = new Date(y, m - 1, d - (isMonday ? 3 : 1));
   return `cut-off 5pm ${cutoffDate.toLocaleDateString("en-SG", { day: "numeric", month: "short" })}`;
-}
-
-function getDateRange(weeksAhead: number): string[] {
-  const dates: string[] = [];
-  for (let i = 0; i < weeksAhead * 7; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().split("T")[0]);
-  }
-  return dates;
 }
 
 function getDOW(dateStr: string) {
@@ -114,7 +105,7 @@ export default function SlotManagement() {
   }
 
   async function loadAndGenerate(weeks: number) {
-    const dates = getDateRange(weeks);
+    const dates = getNextDays(weeks * 7);
 
     // Fetch existing slots + real order counts in parallel
     const [slotsRes, ordersRes] = await Promise.all([
@@ -232,8 +223,8 @@ export default function SlotManagement() {
     return slots.find((s) => s.delivery_date === date && s.slot_type === type);
   }
 
-  const today = new Date().toISOString().split("T")[0];
-  const dates = getDateRange(weeksAhead);
+  const today = isoDateSGT();
+  const dates = getNextDays(weeksAhead * 7);
   const weeks = groupByWeek(dates);
 
   // Summary stats

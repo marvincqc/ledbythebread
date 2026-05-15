@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { supabase } from "../lib/supabase";
+import { pageCache } from "../lib/pageCache";
 
 export default function CartPanel() {
   const { items, updateQuantity, removeItem, closeCart, subtotal, totalItems } =
@@ -11,12 +12,22 @@ export default function CartPanel() {
   const [minOrderValueEnabled, setMinOrderValueEnabled] = useState(false);
 
   useEffect(() => {
+    type CartSettings = { min: number; enabled: boolean };
+    const cached = pageCache.get<CartSettings>("cart-settings");
+    if (cached) {
+      setMinOrderValue(cached.min);
+      setMinOrderValueEnabled(cached.enabled);
+      return;
+    }
     supabase.from("admin_settings").select("key, value")
       .in("key", ["store_min_order_value", "store_min_order_value_enabled"])
       .then(({ data }) => {
         if (!data) return;
-        setMinOrderValue(parseFloat(data.find((s) => s.key === "store_min_order_value")?.value ?? "0") || 0);
-        setMinOrderValueEnabled(data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true");
+        const min = parseFloat(data.find((s) => s.key === "store_min_order_value")?.value ?? "0") || 0;
+        const enabled = data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true";
+        setMinOrderValue(min);
+        setMinOrderValueEnabled(enabled);
+        pageCache.set("cart-settings", { min, enabled });
       });
   }, []);
 

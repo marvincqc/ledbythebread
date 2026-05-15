@@ -5,6 +5,7 @@ import { useAuthStore } from "../../store/authStore";
 import type { Order } from "../../types";
 import { STATUS_COLORS } from "../../types";
 import { pageCache } from "../../lib/pageCache";
+import { formatOrderId, isoDateSGT } from "../../lib/utils";
 
 interface DashboardStats {
   totalOrdersToday: number;
@@ -14,11 +15,6 @@ interface DashboardStats {
   pendingOrders: number;
   totalOrdersAllTime: number;
   unreadMessages: number;
-}
-
-function formatOrderId(createdAt: string): string {
-  const d = new Date(createdAt);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}-${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
 }
 
 export default function AdminDashboard() {
@@ -33,7 +29,7 @@ export default function AdminDashboard() {
   const [recentOrders, setRecentOrders] = useState<Order[]>(cached?.recentOrders ?? []);
   const [loading, setLoading] = useState(!cached);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = isoDateSGT();
 
   useEffect(() => {
     async function loadDashboard(silent = false) {

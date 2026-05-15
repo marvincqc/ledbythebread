@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, callEdgeFunction } from "../../lib/supabase";
 import type { WaitlistEntry, Sku, DeliverySlot, SlotType } from "../../types";
+import { getNextDays, isoDateSGT } from "../../lib/utils";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-SG", {
@@ -16,16 +17,6 @@ function timeAgo(isoStr: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
-}
-
-function getNextDays(count: number): string[] {
-  const dates: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().split("T")[0]);
-  }
-  return dates;
 }
 
 interface ModalItem {
@@ -63,21 +54,29 @@ export default function AdminWaitlist() {
 
   async function fetchEntries() {
     setLoading(true);
-    const { data } = await supabase
-      .from("slot_waitlist")
-      .select("*")
-      .order("delivery_date")
-      .order("slot_type")
-      .order("created_at");
-    setEntries((data ?? []) as WaitlistEntry[]);
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from("slot_waitlist")
+        .select("*")
+        .order("delivery_date")
+        .order("slot_type")
+        .order("created_at");
+      setEntries((data ?? []) as WaitlistEntry[]);
+    } catch {
+      // network error — show empty state
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleDelete(id: string) {
     setDeletingId(id);
-    const { error } = await supabase.from("slot_waitlist").delete().eq("id", id);
-    if (!error) setEntries((prev) => prev.filter((e) => e.id !== id));
-    setDeletingId(null);
+    try {
+      const { error } = await supabase.from("slot_waitlist").delete().eq("id", id);
+      if (!error) setEntries((prev) => prev.filter((e) => e.id !== id));
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   function openModal(entry: WaitlistEntry) {
@@ -92,12 +91,12 @@ export default function AdminWaitlist() {
     setModalError(null);
     setCreatedOrderId(null);
 
-    const today = new Date().toISOString().split("T")[0];
-    const future = new Date();
-    future.setDate(future.getDate() + 30);
+    const todaySGT = isoDateSGT();
+    const [ty, tm, td] = todaySGT.split("-").map(Number);
+    const futureSGT = new Date(Date.UTC(ty, tm - 1, td + 30)).toISOString().split("T")[0];
     supabase.from("delivery_slots").select("*")
-      .gte("delivery_date", today)
-      .lte("delivery_date", future.toISOString().split("T")[0])
+      .gte("delivery_date", todaySGT)
+      .lte("delivery_date", futureSGT)
       .order("delivery_date").order("slot_type")
       .then(({ data }) => setAllSlots((data ?? []) as DeliverySlot[]));
   }

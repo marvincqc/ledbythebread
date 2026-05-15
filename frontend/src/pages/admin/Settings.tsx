@@ -3,13 +3,15 @@ import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { pageCache } from "../../lib/pageCache";
 
-type Setting = { key: string; value: string; saved: string; saving: boolean };
-
 function useSetting(key: string, initial = "") {
   const [value, setValue] = useState(initial);
   const [saved, setSaved] = useState(initial);
   const [saving, setSaving] = useState(false);
   return { value, setValue, saved, setSaved, saving, setSaving };
+}
+
+function SectionLabel({ label }: { label: string }) {
+  return <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">{label}</p>;
 }
 
 export default function AdminSettings() {
@@ -86,10 +88,6 @@ export default function AdminSettings() {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
   }
-
-  const SectionLabel = ({ label }: { label: string }) => (
-    <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">{label}</p>
-  );
 
   return (
     <div className="min-h-screen bg-background">
