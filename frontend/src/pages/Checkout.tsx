@@ -47,7 +47,7 @@ function formatCutoffLabel(slot: DeliverySlot): string {
   const timeStr = slot.slot_type === "morning" ? "5pm" : "11am";
 
   if (slot.cut_off_override) {
-    return `Order by ${new Date(slot.cut_off_override).toLocaleTimeString("en-SG", {
+    return `Order before ${new Date(slot.cut_off_override).toLocaleTimeString("en-SG", {
       hour: "numeric", minute: "2-digit", timeZone: "Asia/Singapore", hour12: true,
     })}`;
   }
@@ -60,14 +60,14 @@ function formatCutoffLabel(slot: DeliverySlot): string {
   const todaySGT = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
   const cutoffSGT = cutoffUTC.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
 
-  if (cutoffSGT === todaySGT) return `Order by ${timeStr} today`;
+  if (cutoffSGT === todaySGT) return `Order before ${timeStr} today`;
 
   const tomorrowUTC = new Date();
   tomorrowUTC.setUTCDate(tomorrowUTC.getUTCDate() + 1);
   const tomorrowSGT = tomorrowUTC.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
-  if (cutoffSGT === tomorrowSGT) return `Order by ${timeStr} tomorrow`;
+  if (cutoffSGT === tomorrowSGT) return `Order before ${timeStr} tomorrow`;
 
-  return `Order by ${timeStr} ${cutoffUTC.toLocaleDateString("en-SG", {
+  return `Order before ${timeStr} ${cutoffUTC.toLocaleDateString("en-SG", {
     weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Singapore",
   })}`;
 }
