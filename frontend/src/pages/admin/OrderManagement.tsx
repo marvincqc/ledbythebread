@@ -45,6 +45,7 @@ export default function OrderManagement() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   // order_id → unread customer message count
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
@@ -213,6 +214,74 @@ export default function OrderManagement() {
     setTimeout(() => setMessage(null), 3000);
   }
 
+  function csvEscape(val: string | number | null | undefined): string {
+    if (val == null) return "";
+    const str = String(val);
+    return str.includes(",") || str.includes('"') || str.includes("\n")
+      ? `"${str.replace(/"/g, '""')}"`
+      : str;
+  }
+
+  async function downloadCSV() {
+    setExportingCsv(true);
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*, order_items(*, sku:skus(*))")
+        .order("delivery_date", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (error || !data) { showMessage("error", "Export failed. Please try again."); return; }
+
+      const headers = [
+        "Order ID", "Created At", "Customer Name", "Phone", "Email",
+        "Delivery Date", "Slot", "Address", "Status",
+        "Item", "Qty", "Unit Price (S$)", "Item Total (S$)", "Order Total (S$)",
+      ];
+
+      const allOrders = data as unknown as Order[];
+      const rows: string[][] = [];
+      for (const order of allOrders) {
+        const orderId = formatOrderId(order.created_at);
+        const createdAt = new Date(order.created_at).toLocaleString("en-SG", { timeZone: "Asia/Singapore" });
+        const name = order.guest_info?.name ?? "";
+        const phone = order.guest_info?.phone ?? "";
+        const email = order.guest_info?.email ?? "";
+        const items = order.order_items ?? [];
+        if (items.length === 0) {
+          rows.push([
+            orderId, createdAt, name, phone, email,
+            order.delivery_date, order.slot_type, order.delivery_address, order.status,
+            "", "", "", "", order.subtotal.toFixed(2),
+          ]);
+        } else {
+          items.forEach((item, i) => {
+            rows.push([
+              orderId, createdAt, name, phone, email,
+              order.delivery_date, order.slot_type, order.delivery_address, order.status,
+              item.sku?.name ?? "Unknown",
+              String(item.quantity),
+              item.unit_price.toFixed(2),
+              (item.unit_price * item.quantity).toFixed(2),
+              i === 0 ? order.subtotal.toFixed(2) : "",
+            ]);
+          });
+        }
+      }
+
+      const csv = [headers, ...rows].map((r) => r.map(csvEscape).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `orders-${filters.dateFrom}_to_${filters.dateTo}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingCsv(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-primary text-white px-6 py-4 flex items-center gap-4">
@@ -278,9 +347,21 @@ export default function OrderManagement() {
           <div className="flex-1 card overflow-hidden min-w-0">
             <div className="px-5 py-3 border-b border-primary/10 flex items-center justify-between">
               <span className="font-semibold text-primary text-sm">{filteredOrders.length} orders</span>
-              <button onClick={fetchOrders} className="text-sm text-primary hover:text-primary-dark font-medium">
-                Refresh
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={downloadCSV}
+                  disabled={exportingCsv}
+                  className="flex items-center gap-1.5 text-sm text-text-muted hover:text-primary font-medium transition-colors disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {exportingCsv ? "Exporting…" : "Export CSV"}
+                </button>
+                <button onClick={fetchOrders} className="text-sm text-primary hover:text-primary-dark font-medium">
+                  Refresh
+                </button>
+              </div>
             </div>
 
             {loading ? (
