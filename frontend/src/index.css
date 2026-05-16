@@ -90,3 +90,18 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* Zone map tooltip labels */
+.zone-map-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: #1a1a1a;
+  text-shadow: 0 0 3px white, 0 0 6px white;
+  white-space: nowrap;
+}
+.zone-map-label::before {
+  display: none !important;
+}

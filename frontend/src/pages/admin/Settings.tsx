@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { pageCache } from "../../lib/pageCache";
 import type { DeliveryZone } from "../../types";
+
+const ZoneMapPreview = lazy(() => import("../../components/ZoneMapPreview"));
 
 function useSetting(initial = "") {
   const [value, setValue] = useState(initial);
@@ -373,6 +375,7 @@ export default function AdminSettings() {
             {/* Delivery Zones */}
             <div>
               <SectionLabel label="Delivery Zones" />
+              <div className="space-y-4">
               <div className="card p-5">
                 <div className="flex items-start justify-between mb-1">
                   <div>
@@ -433,6 +436,25 @@ export default function AdminSettings() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {!zonesLoading && zones.length > 0 && (
+                <div className="card overflow-hidden">
+                  <div className="px-5 py-3 border-b border-primary/10">
+                    <h3 className="font-semibold text-text-main text-sm">Zone Map Preview</h3>
+                    <p className="text-text-muted text-xs mt-0.5">Visualize delivery zones on Singapore map to check for coverage gaps.</p>
+                  </div>
+                  <div className="p-3">
+                    <Suspense fallback={
+                      <div className="h-[400px] flex items-center justify-center bg-background rounded-lg">
+                        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    }>
+                      <ZoneMapPreview zones={zones} />
+                    </Suspense>
+                  </div>
+                </div>
+              )}
               </div>
             </div>
 
