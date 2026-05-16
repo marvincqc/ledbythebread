@@ -73,6 +73,10 @@ export default function SlotManagement() {
   const [zones, setZones] = useState<DeliveryZone[]>(() => pageCache.get<DeliveryZone[]>('admin-zones') ?? []);
   const [morningCutoffHour, setMorningCutoffHour] = useState(17);
   const [eveningCutoffHour, setEveningCutoffHour] = useState(11);
+  // slotId → zone id array; tracks multi-zone assignments separately from slot state
+  const [slotZoneMap, setSlotZoneMap] = useState<Record<string, string[]>>({});
+  const [savedSlotZoneMap, setSavedSlotZoneMap] = useState<Record<string, string[]>>({});
+  const [openZonePicker, setOpenZonePicker] = useState<string | null>(null);
   const [weeksAhead, setWeeksAhead] = useState(2);
   const [editingCapacity, setEditingCapacity] = useState<{ id: string; value: string } | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -148,6 +152,20 @@ export default function SlotManagement() {
     setSlots(synced);
     setSavedSlots(synced);
 
+    // Load zone assignments for these slots
+    const syncedIds = synced.map((s) => s.id);
+    if (syncedIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: zoneRows } = await (supabase as any)
+        .from("delivery_slot_zones").select("slot_id, zone_id").in("slot_id", syncedIds);
+      const zoneMap: Record<string, string[]> = {};
+      for (const row of (zoneRows ?? []) as { slot_id: string; zone_id: string }[]) {
+        (zoneMap[row.slot_id] ??= []).push(row.zone_id);
+      }
+      setSlotZoneMap(zoneMap);
+      setSavedSlotZoneMap(zoneMap);
+    }
+
     // Auto-generate missing slots silently (weekdays open, weekends closed, default 10)
     const toInsert: { delivery_date: string; slot_type: SlotType; max_orders: number; is_open: boolean; current_orders: number }[] = [];
     for (const date of dates) {
@@ -185,8 +203,8 @@ export default function SlotManagement() {
     setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, is_open: !slot.is_open } : s));
   }
 
-  function changeZone(slot: DeliverySlot, zoneId: string | null) {
-    setSlots((prev) => prev.map((s) => s.id === slot.id ? { ...s, zone_id: zoneId } : s));
+  function updateSlotZones(slotId: string, zoneIds: string[]) {
+    setSlotZoneMap((prev) => ({ ...prev, [slotId]: zoneIds }));
   }
 
   function saveCapacity(slot: DeliverySlot, value: string) {
@@ -198,27 +216,47 @@ export default function SlotManagement() {
   }
 
   async function saveAllSlots() {
-    const changed = slots.filter((s) => {
+    const changedSlotFields = slots.filter((s) => {
       const saved = savedSlots.find((ss) => ss.id === s.id);
-      return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders || s.zone_id !== saved.zone_id);
+      return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders);
     });
-    if (changed.length === 0) return;
-    const updates = changed.map((s) =>
-      supabase.from("delivery_slots").update({ is_open: s.is_open, max_orders: s.max_orders, zone_id: s.zone_id ?? null }).eq("id", s.id)
+    const changedZoneSlotIds = Object.keys(slotZoneMap).filter((slotId) => {
+      const cur = [...(slotZoneMap[slotId] ?? [])].sort().join(",");
+      const sav = [...(savedSlotZoneMap[slotId] ?? [])].sort().join(",");
+      return cur !== sav;
+    });
+    if (changedSlotFields.length === 0 && changedZoneSlotIds.length === 0) return;
+
+    const results = await Promise.all(
+      changedSlotFields.map((s) =>
+        supabase.from("delivery_slots").update({ is_open: s.is_open, max_orders: s.max_orders }).eq("id", s.id)
+      )
     );
-    const results = await Promise.all(updates);
-    const failed = results.filter((r) => r.error);
-    if (failed.length) {
+    if (results.some((r) => r.error)) {
       showMessage("error", "Some changes failed to save. Please try again.");
-    } else {
-      setSavedSlots([...slots]);
-      pageCache.set('admin-slots', [...slots]);
-      showMessage("success", "All changes saved.");
+      return;
     }
+
+    for (const slotId of changedZoneSlotIds) {
+      const newIds = slotZoneMap[slotId] ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from("delivery_slot_zones").delete().eq("slot_id", slotId);
+      if (newIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from("delivery_slot_zones")
+          .insert(newIds.map((zoneId) => ({ slot_id: slotId, zone_id: zoneId })));
+      }
+    }
+
+    setSavedSlots([...slots]);
+    setSavedSlotZoneMap({ ...slotZoneMap });
+    pageCache.set('admin-slots', [...slots]);
+    showMessage("success", "All changes saved.");
   }
 
   function discardSlots() {
     setSlots([...savedSlots]);
+    setSlotZoneMap({ ...savedSlotZoneMap });
   }
 
   function showMessage(type: "success" | "error", text: string) {
@@ -241,9 +279,15 @@ export default function SlotManagement() {
   // Dirty tracking
   const changedSlots = slots.filter((s) => {
     const saved = savedSlots.find((ss) => ss.id === s.id);
-    return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders || s.zone_id !== saved.zone_id);
+    return saved && (s.is_open !== saved.is_open || s.max_orders !== saved.max_orders);
   });
-  const isDirty = changedSlots.length > 0;
+  const changedZoneSlotIds = Object.keys(slotZoneMap).filter((slotId) => {
+    const cur = [...(slotZoneMap[slotId] ?? [])].sort().join(",");
+    const sav = [...(savedSlotZoneMap[slotId] ?? [])].sort().join(",");
+    return cur !== sav;
+  });
+  const isDirty = changedSlots.length > 0 || changedZoneSlotIds.length > 0;
+  const changeCount = changedSlots.length + changedZoneSlotIds.length;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -351,19 +395,45 @@ export default function SlotManagement() {
                                       {slot.current_orders}/{slot.max_orders}
                                     </button>
                                   )}
-                                  {zones.length > 0 && (
-                                    <select
-                                      value={slot.zone_id ?? ""}
-                                      onChange={(e) => changeZone(slot, e.target.value || null)}
-                                      className="mt-1 text-xs border border-primary/20 rounded px-1 py-0.5 bg-white text-text-muted focus:outline-none focus:border-primary max-w-[100px]"
-                                      title="Delivery zone"
-                                    >
-                                      <option value="">All areas</option>
-                                      {zones.map((z) => (
-                                        <option key={z.id} value={z.id}>{z.name}</option>
-                                      ))}
-                                    </select>
-                                  )}
+                                  {zones.length > 0 && (() => {
+                                    const selectedIds = slotZoneMap[slot.id] ?? [];
+                                    const label = selectedIds.length === 0
+                                      ? "All areas"
+                                      : selectedIds.length === 1
+                                      ? (zones.find((z) => z.id === selectedIds[0])?.name ?? "1 zone")
+                                      : `${selectedIds.length} zones`;
+                                    return (
+                                      <div className="relative mt-1">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setOpenZonePicker(openZonePicker === slot.id ? null : slot.id); }}
+                                          className="text-xs border border-primary/20 rounded px-1.5 py-0.5 bg-white text-text-muted hover:border-primary transition-colors w-full text-left max-w-[95px] truncate"
+                                        >
+                                          {label}
+                                        </button>
+                                        {openZonePicker === slot.id && (
+                                          <div className="absolute bottom-full left-0 z-20 bg-white border border-primary/20 rounded-lg shadow-lg py-1 w-36 mb-1">
+                                            {zones.map((zone) => (
+                                              <label key={zone.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-background cursor-pointer">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedIds.includes(zone.id)}
+                                                  onChange={(e) => {
+                                                    const next = e.target.checked
+                                                      ? [...selectedIds, zone.id]
+                                                      : selectedIds.filter((id) => id !== zone.id);
+                                                    updateSlotZones(slot.id, next);
+                                                  }}
+                                                  className="w-3.5 h-3.5 accent-primary flex-shrink-0"
+                                                />
+                                                <span className="text-xs text-text-main truncate">{zone.name}</span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                                 <button
                                   onClick={() => toggleSlot(slot)}
@@ -405,7 +475,7 @@ export default function SlotManagement() {
             <div className="flex items-center gap-2 text-sm">
               <span className="w-2 h-2 rounded-full bg-warning inline-block" />
               <span className="text-text-muted">
-                <span className="font-semibold text-text-main">{changedSlots.length} slot{changedSlots.length !== 1 ? "s" : ""}</span> with unsaved changes
+                <span className="font-semibold text-text-main">{changeCount} change{changeCount !== 1 ? "s" : ""}</span> unsaved
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -424,6 +494,11 @@ export default function SlotManagement() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Backdrop to close zone picker on outside click */}
+      {openZonePicker && (
+        <div className="fixed inset-0 z-10" onClick={() => setOpenZonePicker(null)} />
       )}
     </div>
   );

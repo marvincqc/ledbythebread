@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useAuthStore } from "../store/authStore";
 import { supabase, callEdgeFunction } from "../lib/supabase";
-import type { DeliverySlot, SlotType } from "../types";
+import type { DeliverySlot, DeliveryZone, SlotType } from "../types";
 import { WHATSAPP_LINK } from "../lib/constants";
 import { getNextDays, haversineKm, computeSlotCutoff, formatHourSGT } from "../lib/utils";
 
@@ -156,9 +156,10 @@ export default function Checkout() {
   useEffect(() => {
     async function fetchSlots() {
       setSlotsLoading(true);
-      const { data } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
         .from("delivery_slots")
-        .select("*, zone:delivery_zones(*)")
+        .select("*, zones:delivery_slot_zones(zone:delivery_zones(*))")
         .eq("is_open", true)
         .order("delivery_date", { ascending: true })
         .order("slot_type", { ascending: true });
@@ -254,14 +255,18 @@ export default function Checkout() {
   const cutoffOf = (slot: DeliverySlot) => getSlotCutoff(slot, morningCutoffHour, eveningCutoffHour);
   const cutoffLabelOf = (slot: DeliverySlot) => formatCutoffLabel(slot, morningCutoffHour, eveningCutoffHour);
 
-  // Returns false only when a zone is set AND the customer's address is known AND outside the zone.
-  // Before address is entered, all slots pass (we can't filter without coordinates).
   const customerLat = addressResult ? parseFloat(addressResult.LATITUDE) : null;
   const customerLng = addressResult ? parseFloat(addressResult.LONGITUDE) : null;
 
   function isSlotInRange(slot: DeliverySlot): boolean {
-    if (!slot.zone || customerLat === null || customerLng === null) return true;
-    return haversineKm(customerLat, customerLng, slot.zone.center_lat, slot.zone.center_lng) <= slot.zone.radius_km;
+    const assignedZones = (slot.zones ?? [])
+      .map((sz) => sz.zone)
+      .filter((z): z is DeliveryZone => z !== null);
+    // No zones = open to all areas; no address yet = can't filter yet
+    if (assignedZones.length === 0 || customerLat === null || customerLng === null) return true;
+    return assignedZones.some(
+      (z) => haversineKm(customerLat, customerLng, z.center_lat, z.center_lng) <= z.radius_km
+    );
   }
 
   const getSlotStatus = (slot: DeliverySlot) => {

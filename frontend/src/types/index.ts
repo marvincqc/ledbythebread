@@ -56,8 +56,7 @@ export interface DeliverySlot {
   current_orders: number;
   is_open: boolean;
   cut_off_override: string | null;
-  zone_id?: string | null;
-  zone?: DeliveryZone | null;
+  zones?: { zone: DeliveryZone | null }[] | null; // from delivery_slot_zones junction join
 }
 
 export type OrderStatus =
