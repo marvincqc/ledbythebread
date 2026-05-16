@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { CartItem, Sku } from "../types";
 
 interface CartState {
@@ -73,7 +73,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "ledbythebread-cart",
-      // Don't persist isOpen state
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({ items: state.items }),
     }
   )
