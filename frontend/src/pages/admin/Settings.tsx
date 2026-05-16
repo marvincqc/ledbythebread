@@ -444,7 +444,7 @@ export default function AdminSettings() {
                     <h3 className="font-semibold text-text-main text-sm">Zone Map Preview</h3>
                     <p className="text-text-muted text-xs mt-0.5">Visualize delivery zones on Singapore map to check for coverage gaps.</p>
                   </div>
-                  <div className="p-3">
+                  <div className="p-3" style={{ isolation: "isolate" }}>
                     <Suspense fallback={
                       <div className="h-[400px] flex items-center justify-center bg-background rounded-lg">
                         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
