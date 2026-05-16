@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_slot_zones: {
+        Row: {
+          slot_id: string
+          zone_id: string
+        }
+        Insert: {
+          slot_id: string
+          zone_id: string
+        }
+        Update: {
+          slot_id?: string
+          zone_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_slot_zones_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_slot_zones_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_slots: {
         Row: {
           current_orders: number
@@ -56,7 +86,6 @@ export type Database = {
           is_open: boolean
           max_orders: number
           slot_type: string
-          zone_id: string | null
         }
         Insert: {
           current_orders?: number
@@ -66,7 +95,6 @@ export type Database = {
           is_open?: boolean
           max_orders?: number
           slot_type: string
-          zone_id?: string | null
         }
         Update: {
           current_orders?: number
@@ -76,17 +104,8 @@ export type Database = {
           is_open?: boolean
           max_orders?: number
           slot_type?: string
-          zone_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_slots_zone_id_fkey"
-            columns: ["zone_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_zones"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       delivery_zones: {
         Row: {

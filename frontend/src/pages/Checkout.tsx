@@ -156,8 +156,7 @@ export default function Checkout() {
   useEffect(() => {
     async function fetchSlots() {
       setSlotsLoading(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from("delivery_slots")
         .select("*, zones:delivery_slot_zones(zone:delivery_zones(*))")
         .eq("is_open", true)

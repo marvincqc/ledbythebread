@@ -155,8 +155,7 @@ export default function SlotManagement() {
     // Load zone assignments for these slots
     const syncedIds = synced.map((s) => s.id);
     if (syncedIds.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: zoneRows } = await (supabase as any)
+      const { data: zoneRows } = await supabase
         .from("delivery_slot_zones").select("slot_id, zone_id").in("slot_id", syncedIds);
       const zoneMap: Record<string, string[]> = {};
       for (const row of (zoneRows ?? []) as { slot_id: string; zone_id: string }[]) {
@@ -239,11 +238,9 @@ export default function SlotManagement() {
 
     for (const slotId of changedZoneSlotIds) {
       const newIds = slotZoneMap[slotId] ?? [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from("delivery_slot_zones").delete().eq("slot_id", slotId);
+      await supabase.from("delivery_slot_zones").delete().eq("slot_id", slotId);
       if (newIds.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from("delivery_slot_zones")
+        await supabase.from("delivery_slot_zones")
           .insert(newIds.map((zoneId) => ({ slot_id: slotId, zone_id: zoneId })));
       }
     }
