@@ -172,6 +172,15 @@ export default function Checkout() {
     if (items.length === 0 && !orderPlaced.current) navigate("/", { replace: true });
   }, [items, navigate]);
 
+  // Reset slot selection when address changes — ensures the chosen slot always matches the current location
+  useEffect(() => {
+    setSelectedDate("");
+    setSelectedSlot("");
+    setWaitlistTarget(null);
+    setWaitlistSuccess(false);
+    setWaitlistError(null);
+  }, [addressResult]);
+
   // Auto-lookup when postal code reaches 6 digits
   useEffect(() => {
     if (postalCode.length < 6) {
@@ -348,7 +357,7 @@ export default function Checkout() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <h1 className="font-heading text-3xl font-bold text-primary mb-2">Checkout</h1>
       <div className="flex items-center gap-1.5 mb-6 text-xs text-text-muted overflow-x-auto pb-1">
-        {["Order Summary", "Delivery", "Address", "Contact", "Payment"].map((step, i, arr) => (
+        {["Order Summary", "Address", "Delivery", "Contact", "Payment"].map((step, i, arr) => (
           <span key={step} className="flex items-center gap-1.5 flex-shrink-0">
             <span className="font-medium">{step}</span>
             {i < arr.length - 1 && <span className="text-primary/30">›</span>}
@@ -377,9 +386,81 @@ export default function Checkout() {
           </div>
         </div>
 
+        {/* Delivery Address */}
+        <div className="card p-5">
+          <SectionHeader step={2} title="Delivery Address" />
+          <p className="text-text-muted text-xs -mt-2 mb-4">We deliver island-wide across Singapore.</p>
+
+          <div className="mb-4">
+            <label className="label" htmlFor="postal">Singapore Postal Code</label>
+            <div className="relative">
+              <input
+                id="postal"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="e.g. 560123"
+                className={`input pr-10 font-mono tracking-widest ${
+                  addressLookup === "found" ? "border-success focus:border-success" :
+                  addressLookup === "error" ? "border-error focus:border-error" : ""
+                }`}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {addressLookup === "loading" && (
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                )}
+                {addressLookup === "found" && (
+                  <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                {addressLookup === "error" && (
+                  <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+            </div>
+            {addressError && <p className="text-error text-xs mt-1">{addressError}</p>}
+          </div>
+
+          {addressLookup === "found" && addressResult && (
+            <div className="mb-4 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
+              <p className="text-xs text-text-muted font-medium uppercase tracking-wide mb-1">Address found</p>
+              <p className="text-text-main font-medium">{addressResult.BLK_NO} {addressResult.ROAD_NAME}</p>
+              <p className="text-text-muted text-sm">Singapore {addressResult.POSTAL}</p>
+            </div>
+          )}
+
+          {addressLookup === "found" && (
+            <div className="space-y-4">
+              <div>
+                <label className="label" htmlFor="unit">Unit Number</label>
+                <input id="unit" type="text" value={unitNo} onChange={(e) => setUnitNo(e.target.value)}
+                  placeholder="e.g. #05-10" className="input" required />
+              </div>
+              <div>
+                <label className="label" htmlFor="building">
+                  Building Name <span className="text-text-muted font-normal">(optional)</span>
+                </label>
+                <input id="building" type="text" value={buildingName} onChange={(e) => setBuildingName(e.target.value)}
+                  placeholder="e.g. Sunshine Tower" className="input" />
+              </div>
+              {addressPreview && (
+                <p className="text-text-muted text-xs">
+                  <span className="font-medium text-text-main">Full address: </span>
+                  {addressPreview}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Delivery Slot */}
         <div className="card p-5">
-          <SectionHeader step={2} title="Select Delivery Slot" />
+          <SectionHeader step={3} title="Select Delivery Slot" />
           {slotsLoading ? (
             <div className="flex items-center gap-2 text-text-muted">
               <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -527,96 +608,6 @@ export default function Checkout() {
               )}
               {!selectedDate && <p className="text-text-muted text-sm mt-2">Select a date above to see available slots.</p>}
             </>
-          )}
-        </div>
-
-        {/* Delivery Address */}
-        <div className="card p-5">
-          <SectionHeader step={3} title="Delivery Address" />
-          <p className="text-text-muted text-xs -mt-2 mb-4">We deliver island-wide across Singapore.</p>
-
-          {/* Step 1: Postal code */}
-          <div className="mb-4">
-            <label className="label" htmlFor="postal">
-              Singapore Postal Code
-            </label>
-            <div className="relative">
-              <input
-                id="postal"
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={postalCode}
-                onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="e.g. 560123"
-                className={`input pr-10 font-mono tracking-widest ${
-                  addressLookup === "found" ? "border-success focus:border-success" :
-                  addressLookup === "error" ? "border-error focus:border-error" : ""
-                }`}
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                {addressLookup === "loading" && (
-                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                )}
-                {addressLookup === "found" && (
-                  <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-                {addressLookup === "error" && (
-                  <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                )}
-              </div>
-            </div>
-            {addressError && <p className="text-error text-xs mt-1">{addressError}</p>}
-          </div>
-
-          {/* Step 2: Auto-filled address */}
-          {addressLookup === "found" && addressResult && (
-            <div className="mb-4 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
-              <p className="text-xs text-text-muted font-medium uppercase tracking-wide mb-1">Address found</p>
-              <p className="text-text-main font-medium">{addressResult.BLK_NO} {addressResult.ROAD_NAME}</p>
-              <p className="text-text-muted text-sm">Singapore {addressResult.POSTAL}</p>
-            </div>
-          )}
-
-          {/* Step 3: Unit number + building name */}
-          {addressLookup === "found" && (
-            <div className="space-y-4">
-              <div>
-                <label className="label" htmlFor="unit">Unit Number</label>
-                <input
-                  id="unit"
-                  type="text"
-                  value={unitNo}
-                  onChange={(e) => setUnitNo(e.target.value)}
-                  placeholder="e.g. #05-10"
-                  className="input"
-                  required
-                />
-              </div>
-              <div>
-                <label className="label" htmlFor="building">
-                  Building Name <span className="text-text-muted font-normal">(optional)</span>
-                </label>
-                <input
-                  id="building"
-                  type="text"
-                  value={buildingName}
-                  onChange={(e) => setBuildingName(e.target.value)}
-                  placeholder="e.g. Sunshine Tower"
-                  className="input"
-                />
-              </div>
-              {addressPreview && (
-                <p className="text-text-muted text-xs">
-                  <span className="font-medium text-text-main">Full address: </span>
-                  {addressPreview}
-                </p>
-              )}
-            </div>
           )}
         </div>
 
