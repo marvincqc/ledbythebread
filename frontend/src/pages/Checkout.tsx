@@ -5,7 +5,7 @@ import { useAuthStore } from "../store/authStore";
 import { supabase, callEdgeFunction } from "../lib/supabase";
 import type { DeliverySlot, SlotType } from "../types";
 import { WHATSAPP_LINK } from "../lib/constants";
-import { getNextDays, haversineKm } from "../lib/utils";
+import { getNextDays, haversineKm, computeSlotCutoff, formatHourSGT } from "../lib/utils";
 
 function SectionHeader({ step, title }: { step: number; title: string }) {
   return (
@@ -24,19 +24,12 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function getSlotCutoff(slot: DeliverySlot): Date {
-  if (slot.cut_off_override) return new Date(slot.cut_off_override);
-  const [y, m, d] = slot.delivery_date.split("-").map(Number);
-  if (slot.slot_type === "morning") {
-    // Previous day 5pm SGT = 09:00 UTC
-    return new Date(Date.UTC(y, m - 1, d - 1, 9, 0));
-  }
-  // Evening: 11am SGT same day = 03:00 UTC
-  return new Date(Date.UTC(y, m - 1, d, 3, 0));
+function getSlotCutoff(slot: DeliverySlot, morningHour = 17, eveningHour = 11): Date {
+  return computeSlotCutoff(slot.delivery_date, slot.slot_type, slot.cut_off_override ?? null, morningHour, eveningHour);
 }
 
-function formatCutoffLabel(slot: DeliverySlot): string {
-  const timeStr = slot.slot_type === "morning" ? "5pm" : "11am";
+function formatCutoffLabel(slot: DeliverySlot, morningHour = 17, eveningHour = 11): string {
+  const timeStr = formatHourSGT(slot.slot_type === "morning" ? morningHour : eveningHour);
 
   if (slot.cut_off_override) {
     return `Order before ${new Date(slot.cut_off_override).toLocaleTimeString("en-SG", {
@@ -44,7 +37,7 @@ function formatCutoffLabel(slot: DeliverySlot): string {
     })}`;
   }
 
-  const cutoff = getSlotCutoff(slot);
+  const cutoff = getSlotCutoff(slot, morningHour, eveningHour);
   const cutoffSGT = cutoff.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
   const todaySGT = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
 
@@ -106,6 +99,8 @@ export default function Checkout() {
   const [weeksOut, setWeeksOut] = useState(2);
   const [minOrderValue, setMinOrderValue] = useState(0);
   const [minOrderValueEnabled, setMinOrderValueEnabled] = useState(false);
+  const [morningCutoffHour, setMorningCutoffHour] = useState(17);
+  const [eveningCutoffHour, setEveningCutoffHour] = useState(11);
 
   // Waitlist state — shown when user taps a full slot
   const [waitlistTarget, setWaitlistTarget] = useState<{ date: string; slot: SlotType } | null>(null);
@@ -118,13 +113,16 @@ export default function Checkout() {
 
   useEffect(() => {
     supabase.from("admin_settings").select("key, value")
-      .in("key", ["paynow_uen", "max_weeks_out", "store_min_order_value", "store_min_order_value_enabled"])
+      .in("key", ["paynow_uen", "max_weeks_out", "store_min_order_value", "store_min_order_value_enabled", "morning_cutoff_hour", "evening_cutoff_hour"])
       .then(({ data }) => {
         if (!data) return;
-        setPayNowUen(data.find((s) => s.key === "paynow_uen")?.value ?? null);
-        setWeeksOut(parseInt(data.find((s) => s.key === "max_weeks_out")?.value ?? "2") || 2);
-        setMinOrderValue(parseFloat(data.find((s) => s.key === "store_min_order_value")?.value ?? "0") || 0);
-        setMinOrderValueEnabled(data.find((s) => s.key === "store_min_order_value_enabled")?.value === "true");
+        const get = (k: string, fb: string) => data.find((s) => s.key === k)?.value ?? fb;
+        setPayNowUen(get("paynow_uen", "") || null);
+        setWeeksOut(parseInt(get("max_weeks_out", "2")) || 2);
+        setMinOrderValue(parseFloat(get("store_min_order_value", "0")) || 0);
+        setMinOrderValueEnabled(get("store_min_order_value_enabled", "false") === "true");
+        setMorningCutoffHour(parseInt(get("morning_cutoff_hour", "17")) || 17);
+        setEveningCutoffHour(parseInt(get("evening_cutoff_hour", "11")) || 11);
       });
   }, []);
 
@@ -244,6 +242,9 @@ export default function Checkout() {
 
   const getSlotsForDate = (date: string) => slots.filter((s) => s.delivery_date === date);
 
+  const cutoffOf = (slot: DeliverySlot) => getSlotCutoff(slot, morningCutoffHour, eveningCutoffHour);
+  const cutoffLabelOf = (slot: DeliverySlot) => formatCutoffLabel(slot, morningCutoffHour, eveningCutoffHour);
+
   // Returns false only when a zone is set AND the customer's address is known AND outside the zone.
   // Before address is entered, all slots pass (we can't filter without coordinates).
   const customerLat = addressResult ? parseFloat(addressResult.LATITUDE) : null;
@@ -256,7 +257,7 @@ export default function Checkout() {
 
   const getSlotStatus = (slot: DeliverySlot) => {
     if (!slot.is_open) return "closed";
-    if (new Date() >= getSlotCutoff(slot)) return "closed";
+    if (new Date() >= cutoffOf(slot)) return "closed";
     if (!isSlotInRange(slot)) return "out_of_range";
     if (slot.current_orders >= slot.max_orders) return "full";
     return "open";
@@ -397,7 +398,7 @@ export default function Checkout() {
                 {dates.map((date) => {
                   const dateSlots = getSlotsForDate(date);
                   const hasOpen = dateSlots.some(
-                    (s) => s.is_open && new Date() < getSlotCutoff(s) && s.current_orders < s.max_orders && isSlotInRange(s)
+                    (s) => s.is_open && new Date() < cutoffOf(s) && s.current_orders < s.max_orders && isSlotInRange(s)
                   );
                   const isSelected = selectedDate === date;
                   return (
@@ -470,7 +471,7 @@ export default function Checkout() {
                           </p>
                           {slot && status !== "closed" && status !== "out_of_range" && (
                             <p className="text-xs text-text-muted/70 mt-0.5">
-                              {formatCutoffLabel(slot)}
+                              {cutoffLabelOf(slot)}
                             </p>
                           )}
                           <p className="text-xs mt-1">

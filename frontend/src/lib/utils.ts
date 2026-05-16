@@ -14,6 +14,30 @@ export function isoDateSGT(d = new Date()): string {
   return d.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
 }
 
+// Computes the cut-off datetime for a slot using configurable SGT hours.
+// morningHour / eveningHour are 24h SGT integers (e.g. 17 = 5pm, 11 = 11am).
+export function computeSlotCutoff(
+  deliveryDate: string,
+  slotType: string,
+  cutoffOverride: string | null,
+  morningHour = 17,
+  eveningHour = 11,
+): Date {
+  if (cutoffOverride) return new Date(cutoffOverride);
+  const [y, m, d] = deliveryDate.split("-").map(Number);
+  if (slotType === "morning") {
+    return new Date(Date.UTC(y, m - 1, d - 1, morningHour - 8, 0));
+  }
+  return new Date(Date.UTC(y, m - 1, d, eveningHour - 8, 0));
+}
+
+// Formats a 24h hour integer to a short 12h label (e.g. 17 → "5pm", 11 → "11am").
+export function formatHourSGT(hour: number): string {
+  if (hour === 0) return "12am";
+  if (hour === 12) return "12pm";
+  return hour < 12 ? `${hour}am` : `${hour - 12}pm`;
+}
+
 // Haversine great-circle distance in km between two lat/lng points.
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;

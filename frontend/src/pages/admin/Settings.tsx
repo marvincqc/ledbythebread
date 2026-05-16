@@ -19,13 +19,22 @@ interface OneMapResult { BLK_NO: string; ROAD_NAME: string; POSTAL: string; LATI
 interface ZoneForm { name: string; postal: string; lat: number | null; lng: number | null; address: string; radius: string; }
 const defaultZoneForm: ZoneForm = { name: "", postal: "", lat: null, lng: null, address: "", radius: "10" };
 
+const HOUR_OPTIONS = Array.from({ length: 18 }, (_, i) => {
+  const h = i + 6; // 6am → 11pm
+  const label = h === 12 ? "12pm" : h < 12 ? `${h}am` : `${h - 12}pm`;
+  return { value: String(h), label };
+});
+
 export default function AdminSettings() {
   const minVal    = useSetting("0.00");
   const [minEnabled, setMinEnabled] = useState(false);
   const [savingToggle, setSavingToggle] = useState(false);
 
-  const uen       = useSetting();
-  const weeks     = useSetting("2");
+  const uen           = useSetting();
+  const weeks         = useSetting("2");
+  const morningCutoff = useSetting("17");
+  const eveningCutoff = useSetting("11");
+  const [savingCutoff, setSavingCutoff] = useState(false);
 
   const [loading, setLoading] = useState(!pageCache.get("admin-settings"));
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -50,7 +59,7 @@ export default function AdminSettings() {
     if (!pageCache.get("admin-settings")) setLoading(true);
     try {
       const { data } = await supabase.from("admin_settings").select("key, value")
-        .in("key", ["store_min_order_value", "store_min_order_value_enabled", "paynow_uen", "max_weeks_out"]);
+        .in("key", ["store_min_order_value", "store_min_order_value_enabled", "paynow_uen", "max_weeks_out", "morning_cutoff_hour", "evening_cutoff_hour"]);
       if (data) {
         const get = (k: string, fallback = "") => data.find((s) => s.key === k)?.value ?? fallback;
         minVal.setValue(get("store_min_order_value", "0.00"));
@@ -60,6 +69,10 @@ export default function AdminSettings() {
         uen.setSaved(get("paynow_uen"));
         weeks.setValue(get("max_weeks_out", "2"));
         weeks.setSaved(get("max_weeks_out", "2"));
+        morningCutoff.setValue(get("morning_cutoff_hour", "17"));
+        morningCutoff.setSaved(get("morning_cutoff_hour", "17"));
+        eveningCutoff.setValue(get("evening_cutoff_hour", "11"));
+        eveningCutoff.setSaved(get("evening_cutoff_hour", "11"));
         pageCache.set("admin-settings", data);
       }
     } finally {
@@ -189,6 +202,26 @@ export default function AdminSettings() {
     } finally { setSavingToggle(false); }
   }
 
+  async function saveCutoffTimes() {
+    const m = parseInt(morningCutoff.value);
+    const e = parseInt(eveningCutoff.value);
+    if (isNaN(m) || m < 0 || m > 23) { showMessage("error", "Invalid morning cut-off hour."); return; }
+    if (isNaN(e) || e < 0 || e > 23) { showMessage("error", "Invalid evening cut-off hour."); return; }
+    setSavingCutoff(true);
+    try {
+      const [r1, r2] = await Promise.all([
+        supabase.from("admin_settings").upsert({ key: "morning_cutoff_hour", value: String(m) }, { onConflict: "key" }),
+        supabase.from("admin_settings").upsert({ key: "evening_cutoff_hour", value: String(e) }, { onConflict: "key" }),
+      ]);
+      if (r1.error || r2.error) { showMessage("error", "Failed to save cut-off times."); }
+      else {
+        morningCutoff.setSaved(String(m));
+        eveningCutoff.setSaved(String(e));
+        showMessage("success", "Cut-off times saved.");
+      }
+    } finally { setSavingCutoff(false); }
+  }
+
   function showMessage(type: "success" | "error", text: string) {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
@@ -283,6 +316,7 @@ export default function AdminSettings() {
             {/* Delivery */}
             <div>
               <SectionLabel label="Delivery" />
+              <div className="space-y-4">
               <div className="card p-5">
                 <h3 className="font-semibold text-text-main mb-0.5">Booking Window</h3>
                 <p className="text-text-muted text-xs mb-4">How many weeks ahead customers can pre-order.</p>
@@ -303,6 +337,36 @@ export default function AdminSettings() {
                     {weeks.saving ? "Saving…" : "Save"}
                   </button>
                 </div>
+              </div>
+
+              {/* Cut-off times */}
+              <div className="card p-5">
+                <h3 className="font-semibold text-text-main mb-0.5">Order Cut-off Times</h3>
+                <p className="text-text-muted text-xs mb-4">When orders stop being accepted for each slot (Singapore time).</p>
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-text-muted w-28 flex-shrink-0">🌅 Morning</span>
+                    <select value={morningCutoff.value} onChange={(e) => morningCutoff.setValue(e.target.value)} className="input flex-1">
+                      {HOUR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <span className="text-xs text-text-muted flex-shrink-0 w-20">previous day</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-text-muted w-28 flex-shrink-0">🌇 Evening</span>
+                    <select value={eveningCutoff.value} onChange={(e) => eveningCutoff.setValue(e.target.value)} className="input flex-1">
+                      {HOUR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <span className="text-xs text-text-muted flex-shrink-0 w-20">same day</span>
+                  </div>
+                </div>
+                <button
+                  onClick={saveCutoffTimes}
+                  disabled={savingCutoff || (morningCutoff.value === morningCutoff.saved && eveningCutoff.value === eveningCutoff.saved)}
+                  className="btn-primary px-5"
+                >
+                  {savingCutoff ? "Saving…" : "Save"}
+                </button>
+              </div>
               </div>
             </div>
 

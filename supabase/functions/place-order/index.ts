@@ -99,16 +99,21 @@ serve(async (req: Request) => {
       }
     }
 
-    // Store minimum order value
+    // Store settings (min order + cut-off hours) — one query for both
     const { data: settingsRows } = await supabase.from("admin_settings").select("key, value")
-      .in("key", ["store_min_order_value", "store_min_order_value_enabled"]);
-    const minOrderValueEnabled = settingsRows?.find((s: { key: string }) => s.key === "store_min_order_value_enabled")?.value === "true";
+      .in("key", ["store_min_order_value", "store_min_order_value_enabled", "morning_cutoff_hour", "evening_cutoff_hour"]);
+    const getS = (k: string, fb: string) => (settingsRows as { key: string; value: string }[] | null)?.find((s) => s.key === k)?.value ?? fb;
+
+    const minOrderValueEnabled = getS("store_min_order_value_enabled", "false") === "true";
     if (minOrderValueEnabled) {
-      const minOrderValue = parseFloat(settingsRows?.find((s: { key: string }) => s.key === "store_min_order_value")?.value ?? "0") || 0;
+      const minOrderValue = parseFloat(getS("store_min_order_value", "0")) || 0;
       if (subtotal < minOrderValue) {
         return error(`Minimum order value is S$${minOrderValue.toFixed(2)}.`, 400, headers);
       }
     }
+
+    const morningHour = parseInt(getS("morning_cutoff_hour", "17")) || 17;
+    const eveningHour = parseInt(getS("evening_cutoff_hour", "11")) || 11;
 
     // Delivery slot
     const { data: slot, error: slotError } = await supabase.from("delivery_slots")
@@ -126,15 +131,20 @@ serve(async (req: Request) => {
       }
     }
 
-    // Cut-off time
-    const { data: cutoffResult } = await supabase.rpc("get_slot_cutoff", {
-      p_delivery_date: payload.delivery_date,
-      p_slot_type: payload.slot_type,
-      p_cut_off_override: slot.cut_off_override ?? null,
-    });
-    const cutoffTime = cutoffResult ? new Date(cutoffResult) : null;
-    if (cutoffTime && new Date() > cutoffTime) {
-      return error(`Order cut-off for this slot has passed.`, 400, headers);
+    // Cut-off time — computed inline using configurable hours
+    let cutoffTime: Date;
+    if (slot.cut_off_override) {
+      cutoffTime = new Date(slot.cut_off_override);
+    } else {
+      const [y, m, d] = payload.delivery_date.split("-").map(Number);
+      if (payload.slot_type === "morning") {
+        cutoffTime = new Date(Date.UTC(y, m - 1, d - 1, morningHour - 8, 0));
+      } else {
+        cutoffTime = new Date(Date.UTC(y, m - 1, d, eveningHour - 8, 0));
+      }
+    }
+    if (new Date() > cutoffTime) {
+      return error("Order cut-off for this slot has passed.", 400, headers);
     }
 
     // Insert order

@@ -3,34 +3,29 @@ import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import type { DeliverySlot, DeliveryZone, SlotType } from "../../types";
 import { pageCache } from "../../lib/pageCache";
-import { getNextDays, isoDateSGT } from "../../lib/utils";
+import { getNextDays, isoDateSGT, computeSlotCutoff, formatHourSGT } from "../../lib/utils";
 
 const DEFAULT_MAX = 10;
 
-function getSlotCutoffDate(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null): Date {
-  if (cutoffOverride) return new Date(cutoffOverride);
-  const [y, m, d] = deliveryDate.split("-").map(Number);
-  if (slotType === "morning") {
-    return new Date(Date.UTC(y, m - 1, d - 1, 9, 0));
-  }
-  return new Date(Date.UTC(y, m - 1, d, 3, 0));
+function getSlotCutoffDate(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null, morningHour = 17, eveningHour = 11): Date {
+  return computeSlotCutoff(deliveryDate, slotType, cutoffOverride, morningHour, eveningHour);
 }
 
-function isSlotExpired(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null): boolean {
-  return new Date() >= getSlotCutoffDate(deliveryDate, slotType, cutoffOverride);
+function isSlotExpired(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null, morningHour = 17, eveningHour = 11): boolean {
+  return new Date() >= getSlotCutoffDate(deliveryDate, slotType, cutoffOverride, morningHour, eveningHour);
 }
 
-function slotCutoffLabel(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null): string {
-  if (isSlotExpired(deliveryDate, slotType, cutoffOverride)) return "expired";
+function slotCutoffLabel(deliveryDate: string, slotType: SlotType, cutoffOverride: string | null, morningHour = 17, eveningHour = 11): string {
+  if (isSlotExpired(deliveryDate, slotType, cutoffOverride, morningHour, eveningHour)) return "expired";
   if (cutoffOverride) {
     return `cut-off ${new Date(cutoffOverride).toLocaleTimeString("en-SG", {
       hour: "numeric", minute: "2-digit", timeZone: "Asia/Singapore", hour12: true,
     })}`;
   }
-  if (slotType === "evening") return "cut-off 11am";
+  const timeStr = formatHourSGT(slotType === "evening" ? eveningHour : morningHour);
   const [y, m, d] = deliveryDate.split("-").map(Number);
-  const cutoffDate = new Date(y, m - 1, d - 1);
-  return `cut-off 5pm ${cutoffDate.toLocaleDateString("en-SG", { day: "numeric", month: "short" })}`;
+  const cutoffDate = new Date(y, m - 1, slotType === "evening" ? d : d - 1);
+  return `cut-off ${timeStr} ${cutoffDate.toLocaleDateString("en-SG", { day: "numeric", month: "short" })}`;
 }
 
 function getDOW(dateStr: string) {
@@ -76,6 +71,8 @@ export default function SlotManagement() {
   const [savedSlots, setSavedSlots] = useState<DeliverySlot[]>(() => pageCache.get<DeliverySlot[]>('admin-slots') ?? []);
   const [loading, setLoading] = useState(!pageCache.get('admin-slots'));
   const [zones, setZones] = useState<DeliveryZone[]>(() => pageCache.get<DeliveryZone[]>('admin-zones') ?? []);
+  const [morningCutoffHour, setMorningCutoffHour] = useState(17);
+  const [eveningCutoffHour, setEveningCutoffHour] = useState(11);
   const [weeksAhead, setWeeksAhead] = useState(2);
   const [editingCapacity, setEditingCapacity] = useState<{ id: string; value: string } | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -94,11 +91,14 @@ export default function SlotManagement() {
   async function init() {
     if (!pageCache.get('admin-slots')) setLoading(true);
     try {
-      // Fetch weeks setting
-      const { data: setting } = await supabase
-        .from("admin_settings").select("value").eq("key", "max_weeks_out").single();
-      const weeks = setting ? parseInt(setting.value) : 2;
+      const { data: settings } = await supabase
+        .from("admin_settings").select("key, value")
+        .in("key", ["max_weeks_out", "morning_cutoff_hour", "evening_cutoff_hour"]);
+      const getS = (k: string, fb: string) => settings?.find((s) => s.key === k)?.value ?? fb;
+      const weeks = parseInt(getS("max_weeks_out", "2")) || 2;
       setWeeksAhead(weeks);
+      setMorningCutoffHour(parseInt(getS("morning_cutoff_hour", "17")) || 17);
+      setEveningCutoffHour(parseInt(getS("evening_cutoff_hour", "11")) || 11);
 
       // Fetch + auto-generate slots
       await loadAndGenerate(weeks);
@@ -308,7 +308,7 @@ export default function SlotManagement() {
                           const slot = getSlot(date, type);
                           if (!slot) return null;
                           const isFull = slot.current_orders >= slot.max_orders;
-                          const expired = isSlotExpired(date, type, slot.cut_off_override ?? null);
+                          const expired = isSlotExpired(date, type, slot.cut_off_override ?? null, morningCutoffHour, eveningCutoffHour);
                           return (
                             <div
                               key={type}
@@ -326,7 +326,7 @@ export default function SlotManagement() {
                                 <div>
                                   <span className="text-xs text-text-muted block">{type === "morning" ? "🌅 Morning" : "🌇 Evening"}</span>
                                   <span className={`text-xs block ${expired ? "text-error/60 italic" : "text-text-muted/60"}`}>
-                                    {slotCutoffLabel(date, type, slot.cut_off_override ?? null)}
+                                    {slotCutoffLabel(date, type, slot.cut_off_override ?? null, morningCutoffHour, eveningCutoffHour)}
                                   </span>
                                   {editingCapacity?.id === slot.id ? (
                                     <input
