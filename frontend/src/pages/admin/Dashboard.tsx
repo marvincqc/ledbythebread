@@ -21,12 +21,13 @@ export default function AdminDashboard() {
   const { profile, signOut } = useAuthStore();
   const navigate = useNavigate();
 
-  const cached = pageCache.get<{ stats: DashboardStats; recentOrders: Order[] }>('admin-dashboard');
+  const cached = pageCache.get<{ stats: DashboardStats; recentOrders: Order[]; unreadCounts: Record<string, number> }>('admin-dashboard');
 
   const [stats, setStats] = useState<DashboardStats>(
     cached?.stats ?? { totalOrdersToday: 0, morningOrdersToday: 0, eveningOrdersToday: 0, revenueToday: 0, pendingOrders: 0, totalOrdersAllTime: 0, unreadMessages: 0 }
   );
   const [recentOrders, setRecentOrders] = useState<Order[]>(cached?.recentOrders ?? []);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(cached?.unreadCounts ?? {});
   const [loading, setLoading] = useState(!cached);
 
   const today = isoDateSGT();
@@ -39,11 +40,20 @@ export default function AdminDashboard() {
           supabase.from("orders").select("*").eq("delivery_date", today).neq("status", "cancelled"),
           supabase.from("orders").select("id", { count: "exact", head: true }).neq("status", "cancelled"),
           supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(10),
-          supabase.from("order_messages").select("id", { count: "exact", head: true }).eq("sender", "customer").is("read_at", null),
+          // Fetch full rows (not head-only) so we get order_id for per-order counts
+          supabase.from("order_messages").select("order_id").eq("sender", "customer").is("read_at", null),
         ]);
 
         if (todayRes.data) {
           const todayOrders = todayRes.data as Order[];
+
+          // Build per-order unread map from the same result used for total count
+          const countsMap: Record<string, number> = {};
+          for (const row of (unreadRes.data ?? []) as { order_id: string }[]) {
+            countsMap[row.order_id] = (countsMap[row.order_id] ?? 0) + 1;
+          }
+          const totalUnread = unreadRes.data?.length ?? 0;
+
           const freshStats = {
             totalOrdersToday: todayOrders.length,
             morningOrdersToday: todayOrders.filter((o) => o.slot_type === "morning").length,
@@ -51,12 +61,13 @@ export default function AdminDashboard() {
             revenueToday: todayOrders.filter((o) => o.status !== "pending").reduce((sum, o) => sum + o.subtotal, 0),
             pendingOrders: todayOrders.filter((o) => o.status === "pending").length,
             totalOrdersAllTime: allOrdersRes.count ?? 0,
-            unreadMessages: unreadRes.count ?? 0,
+            unreadMessages: totalUnread,
           };
           const freshOrders = (recentRes.data ?? []) as Order[];
           setStats(freshStats);
           setRecentOrders(freshOrders);
-          pageCache.set('admin-dashboard', { stats: freshStats, recentOrders: freshOrders });
+          setUnreadCounts(countsMap);
+          pageCache.set('admin-dashboard', { stats: freshStats, recentOrders: freshOrders, unreadCounts: countsMap });
         }
       } finally {
         if (!silent) setLoading(false);
@@ -166,9 +177,16 @@ export default function AdminDashboard() {
                 <table className="w-full text-sm">
                   <thead className="bg-background">
                     <tr>
-                      {["Order ID", "Customer", "Date", "Slot", "Subtotal", "Status"].map((h) => (
-                        <th key={h} className="px-5 py-3 text-left text-text-muted font-medium text-xs uppercase tracking-wide">{h}</th>
-                      ))}
+                      <th className="px-5 py-3 text-left text-text-muted font-medium text-xs uppercase tracking-wide">Order ID</th>
+                      <th className="px-5 py-3 text-left text-text-muted font-medium text-xs uppercase tracking-wide">Customer</th>
+                      <th className="px-5 py-3 text-center text-text-muted font-medium text-xs uppercase tracking-wide w-10">
+                        <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </th>
+                      <th className="px-5 py-3 text-left text-text-muted font-medium text-xs uppercase tracking-wide">Delivery</th>
+                      <th className="px-5 py-3 text-left text-text-muted font-medium text-xs uppercase tracking-wide">Status</th>
+                      <th className="px-5 py-3 text-left text-text-muted font-medium text-xs uppercase tracking-wide">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-primary/5">
@@ -177,20 +195,40 @@ export default function AdminDashboard() {
                         <td colSpan={6} className="px-5 py-8 text-center text-text-muted">No orders yet</td>
                       </tr>
                     ) : (
-                      recentOrders.map((order) => (
-                        <tr key={order.id} className="hover:bg-background/50 transition-colors">
-                          <td className="px-5 py-3 font-mono text-xs text-text-muted">{formatOrderId(order.created_at)}</td>
-                          <td className="px-5 py-3">{order.guest_info?.name ?? "—"}</td>
-                          <td className="px-5 py-3 text-text-muted">{order.delivery_date}</td>
-                          <td className="px-5 py-3 capitalize text-text-muted">{order.slot_type}</td>
-                          <td className="px-5 py-3 font-medium">S${order.subtotal.toFixed(2)}</td>
-                          <td className="px-5 py-3">
-                            <span className={`badge ${STATUS_COLORS[order.status as keyof typeof STATUS_COLORS] ?? "bg-gray-100 text-gray-800"}`}>
-                              {order.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                      recentOrders.map((order) => {
+                        const msgCount = unreadCounts[order.id] ?? 0;
+                        return (
+                          <tr key={order.id} className="hover:bg-background/50 transition-colors">
+                            <td className="px-5 py-3 font-mono text-xs text-text-muted">{formatOrderId(order.created_at)}</td>
+                            <td className="px-5 py-3">
+                              <div className="font-medium text-text-main">{order.guest_info?.name ?? "—"}</div>
+                              <div className="text-xs text-text-muted">{order.guest_info?.phone}</div>
+                            </td>
+                            <td className="px-5 py-3 text-center">
+                              <div className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${
+                                msgCount > 0 ? "bg-indigo-100 text-indigo-600" : "text-gray-300"
+                              }`}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                              </div>
+                              {msgCount > 0 && (
+                                <span className="ml-1 text-xs font-bold text-indigo-600">{msgCount}</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="text-xs font-medium text-text-main">{order.delivery_date}</div>
+                              <div className="text-xs text-text-muted capitalize">{order.slot_type}</div>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className={`badge ${STATUS_COLORS[order.status as keyof typeof STATUS_COLORS] ?? "bg-gray-100 text-gray-800"}`}>
+                                {order.status}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 font-semibold text-primary">S${order.subtotal.toFixed(2)}</td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
