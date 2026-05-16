@@ -11,8 +11,7 @@ function getSlotCutoffDate(deliveryDate: string, slotType: SlotType, cutoffOverr
   if (cutoffOverride) return new Date(cutoffOverride);
   const [y, m, d] = deliveryDate.split("-").map(Number);
   if (slotType === "morning") {
-    const isMonday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
-    return new Date(Date.UTC(y, m - 1, d - (isMonday ? 3 : 1), 9, 0));
+    return new Date(Date.UTC(y, m - 1, d - 1, 9, 0));
   }
   return new Date(Date.UTC(y, m - 1, d, 3, 0));
 }
@@ -30,8 +29,7 @@ function slotCutoffLabel(deliveryDate: string, slotType: SlotType, cutoffOverrid
   }
   if (slotType === "evening") return "cut-off 11am";
   const [y, m, d] = deliveryDate.split("-").map(Number);
-  const isMonday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
-  const cutoffDate = new Date(y, m - 1, d - (isMonday ? 3 : 1));
+  const cutoffDate = new Date(y, m - 1, d - 1);
   return `cut-off 5pm ${cutoffDate.toLocaleDateString("en-SG", { day: "numeric", month: "short" })}`;
 }
 

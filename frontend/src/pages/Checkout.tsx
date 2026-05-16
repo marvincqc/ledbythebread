@@ -28,11 +28,8 @@ function getSlotCutoff(slot: DeliverySlot): Date {
   if (slot.cut_off_override) return new Date(slot.cut_off_override);
   const [y, m, d] = slot.delivery_date.split("-").map(Number);
   if (slot.slot_type === "morning") {
-    // Monday delivery: cut-off is Friday 5pm SGT (3 days back = 09:00 UTC)
-    // All other mornings: cut-off is previous day 5pm SGT
-    const isMonday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
-    const daysBack = isMonday ? 3 : 1;
-    return new Date(Date.UTC(y, m - 1, d - daysBack, 9, 0));
+    // Previous day 5pm SGT = 09:00 UTC
+    return new Date(Date.UTC(y, m - 1, d - 1, 9, 0));
   }
   // Evening: 11am SGT same day = 03:00 UTC
   return new Date(Date.UTC(y, m - 1, d, 3, 0));
